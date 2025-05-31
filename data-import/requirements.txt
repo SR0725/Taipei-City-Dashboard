@@ -3,3 +3,4 @@ requests
 SQLAlchemy
 python-dotenv
 psycopg2-binary
+pyproj
