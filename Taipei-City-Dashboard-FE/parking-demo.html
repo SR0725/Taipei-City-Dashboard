@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>臺北停車場儀表板 - 示例</title>
+	<style>
+		body {
+			font-family: 'Microsoft JhengHei', 'Arial', sans-serif;
+			margin: 0;
+			padding: 20px;
+			background-color: #090909;
+			color: white;
+		}
+
+		.container {
+			max-width: 1200px;
+			margin: 0 auto;
+		}
+
+		.header {
+			text-align: center;
+			margin-bottom: 30px;
+		}
+
+		.demo-config {
+			background-color: #282a2c;
+			padding: 20px;
+			border-radius: 8px;
+			margin-bottom: 20px;
+		}
+
+		.code-block {
+			background-color: #1e1e1e;
+			padding: 15px;
+			border-radius: 5px;
+			overflow-x: auto;
+			font-family: 'Courier New', monospace;
+			font-size: 14px;
+		}
+
+		.feature-list {
+			list-style-type: none;
+			padding: 0;
+		}
+
+		.feature-list li {
+			padding: 8px 0;
+			border-bottom: 1px solid #494b4e;
+		}
+
+		.feature-list li:before {
+			content: "✓ ";
+			color: #5a9cf8;
+			font-weight: bold;
+		}
+
+		.instructions {
+			background-color: #1a3b5c;
+			padding: 20px;
+			border-radius: 8px;
+			margin-top: 20px;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="container">
+		<div class="header">
+			<h1>🚗 臺北停車場儀表板</h1>
+			<h2>互動式圓圈篩選停車場地圖組件</h2>
+		</div>
+
+		<div class="demo-config">
+			<h3>🎯 功能特色</h3>
+			<ul class="feature-list">
+				<li>點擊拖拉創建圓圈篩選範圍</li>
+				<li>根據停車場大小顯示不同顏色和尺寸</li>
+				<li>身障友善和孕婦友善停車場特殊標示</li>
+				<li>即時顯示篩選範圍和找到的停車場數量</li>
+				<li>清除篩選按鈕重置地圖視圖</li>
+				<li>響應式圖例說明停車場類型</li>
+			</ul>
+		</div>
+
+		<div class="demo-config">
+			<h3>📊 組件配置範例</h3>
+			<div class="code-block">
+				<pre>{
+  "id": 999,
+  "index": "taipei_parking_interactive",
+  "name": "臺北停車場互動地圖",
+  "source": "臺北市停車管理工程處",
+  "chart_config": {
+    "color": ["#2196F3", "#4CAF50", "#FF9800", "#F44336", "#9C27B0"],
+    "types": ["ParkingMapChart"],
+    "unit": "個",
+    "categories": []
+  },
+  "query_type": "geojson",
+  "map_config": [{
+    "index": "taipei_parking",
+    "title": "臺北停車場",
+    "type": "circle",
+    "source": "geojson",
+    "city": "taipei",
+    "paint": {
+      "circle-color": ["case",
+        ["get", "handicap_first"], "#2196F3",
+        ["get", "pregnancy_first"], "#9C27B0",
+        [">", ["get", "totalcar"], 500], "#4CAF50",
+        [">", ["get", "totalcar"], 100], "#FF9800",
+        "#F44336"
+      ],
+      "circle-radius": ["interpolate", ["linear"], ["get", "totalcar"],
+        0, 6, 100, 8, 500, 12, 1000, 16
+      ],
+      "circle-opacity": 0.8,
+      "circle-stroke-width": 2,
+      "circle-stroke-color": "#ffffff"
+    },
+    "property": [
+      {"key": "name", "name": "停車場名稱"},
+      {"key": "area", "name": "行政區"},
+      {"key": "address", "name": "地址"},
+      {"key": "totalcar", "name": "小型車格數"},
+      {"key": "totalmotor", "name": "機車格數"},
+      {"key": "payex", "name": "收費方式"},
+      {"key": "tel", "name": "聯絡電話"}
+    ]
+  }],
+  "time_from": "static",
+  "time_to": "now",
+  "update_freq": null,
+  "update_freq_unit": null,
+  "short_desc": "以互動式圓圈篩選方式顯示臺北市各停車場位置、容量及特殊服務",
+  "long_desc": "此組件提供臺北市停車場的互動式地圖視覺化，使用者可透過點擊拖拉的方式創建圓形篩選區域，即時篩選特定範圍內的停車場。停車場以不同顏色和大小標示，反映其容量大小和特殊服務（如身障友善、孕婦友善）。",
+  "use_case": "適用於市民查找附近停車場、城市規劃分析停車場分布、交通管理評估停車供需",
+  "tags": ["停車場", "交通", "地圖", "互動"],
+  "contributors": ["doit"],
+  "city": "taipei"
+}</pre>
+			</div>
+		</div>
+
+		<div class="demo-config">
+			<h3>🗃️ 資料格式</h3>
+			<p>組件使用 GeoJSON 格式的停車場資料，檔案位置：<code>/public/mapData/taipei_parking.geojson</code></p>
+			<div class="code-block">
+				<pre>{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "source_id": 1,
+        "area": "中山區",
+        "name": "台灣聯通長春停車場",
+        "totalcar": 17,
+        "totalmotor": 0,
+        "handicap_first": true,
+        "pregnancy_first": false,
+        "address": "長春路17號地下1層",
+        "tel": "2523-5000",
+        "payex": "計時：100元/時..."
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.5207, 25.0524]
+      }
+    }
+  ]
+}</pre>
+			</div>
+		</div>
+
+		<div class="instructions">
+			<h3>🚀 使用說明</h3>
+			<ol>
+				<li>確保已安裝所有依賴套件：<code>npm install</code></li>
+				<li>啟動開發伺服器：<code>npm run dev</code></li>
+				<li>在儀表板中添加新組件，使用上述配置</li>
+				<li>組件會自動載入停車場資料並顯示在地圖上</li>
+				<li>點擊拖拉創建圓圈篩選範圍，篩選特定區域的停車場</li>
+				<li>使用「清除篩選」按鈕重置地圖視圖</li>
+			</ol>
+
+			<h4>📍 圓圈篩選操作</h4>
+			<ul>
+				<li><strong>點擊：</strong>選擇圓圈中心點</li>
+				<li><strong>拖拉：</strong>調整圓圈半徑範圍</li>
+				<li><strong>釋放：</strong>確認篩選範圍，顯示範圍內停車場</li>
+			</ul>
+
+			<h4>🎨 停車場顏色說明</h4>
+			<ul>
+				<li><span style="color: #F44336;">🔴 紅色</span>：小型停車場 (≤100車位)</li>
+				<li><span style="color: #FF9800;">🟠 橙色</span>：中型停車場 (101-500車位)</li>
+				<li><span style="color: #4CAF50;">🟢 綠色</span>：大型停車場 (>500車位)</li>
+				<li><span style="color: #2196F3;">🔵 藍色</span>：身障友善停車場</li>
+				<li><span style="color: #9C27B0;">🟣 紫色</span>：孕婦友善停車場</li>
+			</ul>
+		</div>
+	</div>
+</body>
+
+</html>

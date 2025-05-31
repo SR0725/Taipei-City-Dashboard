@@ -6,7 +6,7 @@ import http from "../../router/axios";
 import DashboardComponent from "../../dashboardComponent/DashboardComponent.vue";
 
 import { useDialogStore } from "../../store/dialogStore";
-import { useContentStore } from "../../store/contentStore";
+import { useContentStore, parkingComponentTestData } from "../../store/contentStore";
 
 import DialogContainer from "./DialogContainer.vue";
 
@@ -35,7 +35,11 @@ async function handleSearch() {
 			searchbyname: searchName.value,
 		},
 	});
-	const data = response.data.data || [];
+
+
+	// 將測試資料加入到 API 回應中
+	const data = [...(response.data.data || []), parkingComponentTestData];
+	// const data = response.data.data || [];
 	const uniqueData = [...new Map(data
 		// Sort the data to ensure that items with city 'metrotaipei' are at the end
 		.sort((a) => a.city === 'metrotaipei' ? 1 : -1)
@@ -44,6 +48,7 @@ async function handleSearch() {
 		// Convert the map values back to an array
 		.values()
 	];
+
 	allComponents.value = uniqueData;
 	contentStore.loading = false;
 }
