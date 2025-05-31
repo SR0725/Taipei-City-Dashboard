@@ -1,0 +1,139 @@
+{
+	"停車場組件測試配置": {
+		"組件配置": {
+			"id": 999,
+			"index": "taipei_parking_interactive",
+			"name": "臺北停車場互動地圖",
+			"source": "臺北市停車管理工程處",
+			"chart_config": {
+				"color": [
+					"#2196F3",
+					"#4CAF50",
+					"#FF9800",
+					"#F44336",
+					"#9C27B0"
+				],
+				"types": ["ParkingMapChart"],
+				"unit": "個",
+				"categories": []
+			},
+			"query_type": "geojson",
+			"map_config": [
+				{
+					"index": "taipei_parking",
+					"title": "臺北停車場",
+					"type": "circle",
+					"source": "geojson",
+					"city": "taipei",
+					"paint": {
+						"circle-color": [
+							"case",
+							["get", "handicap_first"],
+							"#2196F3",
+							["get", "pregnancy_first"],
+							"#9C27B0",
+							[">", ["get", "totalcar"], 500],
+							"#4CAF50",
+							[">", ["get", "totalcar"], 100],
+							"#FF9800",
+							"#F44336"
+						],
+						"circle-radius": [
+							"interpolate",
+							["linear"],
+							["get", "totalcar"],
+							0,
+							6,
+							100,
+							8,
+							500,
+							12,
+							1000,
+							16
+						],
+						"circle-opacity": 0.8,
+						"circle-stroke-width": 2,
+						"circle-stroke-color": "#ffffff"
+					},
+					"property": [
+						{ "key": "name", "name": "停車場名稱" },
+						{ "key": "area", "name": "行政區" },
+						{ "key": "address", "name": "地址" },
+						{ "key": "totalcar", "name": "小型車格數" },
+						{ "key": "totalmotor", "name": "機車格數" },
+						{ "key": "payex", "name": "收費方式" },
+						{ "key": "tel", "name": "聯絡電話" }
+					]
+				}
+			],
+			"map_filter": null,
+			"history_config": null,
+			"time_from": "static",
+			"time_to": "now",
+			"update_freq": null,
+			"update_freq_unit": null,
+			"short_desc": "以互動式圓圈篩選方式顯示臺北市各停車場位置、容量及特殊服務",
+			"long_desc": "此組件提供臺北市停車場的互動式地圖視覺化，使用者可透過點擊拖拉的方式創建圓形篩選區域，即時篩選特定範圍內的停車場。停車場以不同顏色和大小標示，反映其容量大小和特殊服務（如身障友善、孕婦友善）。",
+			"use_case": "適用於市民查找附近停車場、城市規劃分析停車場分布、交通管理評估停車供需",
+			"links": ["https://data.taipei/"],
+			"tags": ["停車場", "交通", "地圖", "互動"],
+			"contributors": ["doit"],
+			"city": "taipei"
+		},
+
+		"使用說明": {
+			"新增組件步驟": [
+				"1. 進入管理員模式",
+				"2. 點擊新增組件",
+				"3. 在組件列表中找到 '臺北停車場互動地圖'",
+				"4. 選擇並確認新增",
+				"5. 組件會自動載入停車場資料並顯示在儀表板上"
+			],
+
+			"互動操作": {
+				"圓圈篩選": {
+					"點擊": "選擇圓圈中心點",
+					"拖拉": "調整圓圈半徑範圍",
+					"釋放": "確認篩選範圍，顯示範圍內停車場"
+				},
+				"視覺回饋": [
+					"拖拉時顯示即時圓圈預覽",
+					"篩選完成後高亮顯示範圍內停車場",
+					"範圍外停車場變為半透明"
+				]
+			},
+
+			"顏色說明": {
+				"紅色": "小型停車場 (≤100車位)",
+				"橙色": "中型停車場 (101-500車位)",
+				"綠色": "大型停車場 (>500車位)",
+				"藍色": "身障友善停車場",
+				"紫色": "孕婦友善停車場"
+			}
+		},
+
+		"技術細節": {
+			"資料來源": "/public/mapData/taipei_parking.geojson",
+			"組件檔案": "/src/dashboardComponent/components/ParkingMapChart.vue",
+			"圖表類型": "已註冊在 /src/assets/configs/apexcharts/chartTypes.js",
+			"資料格式": "GeoJSON FeatureCollection",
+			"地圖引擎": "Mapbox GL JS",
+			"框架": "Vue 3 Composition API"
+		},
+
+		"除錯資訊": {
+			"常見問題": {
+				"組件不顯示": "檢查 ParkingMapChart 是否已正確匯入到 DashboardComponent.vue",
+				"資料未載入": "確認 taipei_parking.geojson 檔案在 /public/mapData/ 目錄",
+				"圓圈篩選無效": "檢查 mapStore 是否正確初始化",
+				"地圖不顯示": "確認 Mapbox token 設定正確"
+			},
+
+			"console除錯": [
+				"console.log('Component data:', component.chart_data)",
+				"console.log('Map store:', mapStore.map)",
+				"console.log('Processed series:', processedSeries.value)"
+			]
+		}
+	}
+}
