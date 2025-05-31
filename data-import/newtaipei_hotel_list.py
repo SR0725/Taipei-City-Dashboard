@@ -4,6 +4,7 @@ from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import os
 import time
+import re
 
 # Load .env
 load_dotenv()
@@ -74,6 +75,29 @@ for record in records:
 
 # DataFrame
 df = pd.DataFrame(converted_records)
+
+# --- ✅ extract_district 函式 ---
+def extract_district(address):
+    """
+    從 address 擷取出『區』前面兩個字 + 區
+    例如：
+    - 臺北市中正區xxx → 中正區
+    - 新北市板橋區xxx → 板橋區
+    - 台中市西屯區xxx → 西屯區
+    """
+    if pd.isna(address):
+        return None
+    # 抓出「兩個字 + 區」的 pattern
+    pattern = r'([^\d\s]{2}區)'  # 非數字非空白，連兩個字＋區
+    match = re.search(pattern, address)
+    if match:
+        return match.group(1)  # 回傳「xx區」
+    else:
+        return None
+
+
+# --- ✅ 加上 district 欄位 ---
+df["district"] = df["address"].map(extract_district)
 
 # Add fetched_time
 df["fetched_time"] = pd.Timestamp.now()
