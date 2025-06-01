@@ -228,19 +228,6 @@ export const useContentStore = defineStore("content", {
 					});
 				}
 
-				console.log( [
-					{
-						name: "商圈數量",
-						icon: "",
-						data: districtCounts,
-					},
-					{
-						name: "",
-						icon: "",
-						data: new Array(districts.length).fill(0),
-					},
-				]);
-
 				return [
 					{
 						name: "商圈數量",
