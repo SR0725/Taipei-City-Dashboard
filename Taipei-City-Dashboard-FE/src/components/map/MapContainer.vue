@@ -141,13 +141,19 @@ onMounted(() => {
           :class="{ active: mapStore.mapMode === 'normal' }"
           @click="handleModeChange('normal')"
         >
-          一般模式
+          <img
+            src="/images/icons/my_location_24dp_FFFFFF_FILL0_wght400_GRAD0_opsz24.svg"
+            alt="my_location"
+          >
         </button>
         <button
           :class="{ active: mapStore.mapMode === 'circle' }"
           @click="handleModeChange('circle')"
         >
-          圓圈模式
+          <img
+            src="/images/icons/lasso_select_24dp_FFFFFF_FILL0_wght400_GRAD0_opsz24.svg"
+            alt="lasso_select"
+          >
         </button>
         <button
           v-if="mapStore.mapMode === 'circle' && mapStore.circleFilter.isActive"
@@ -157,12 +163,6 @@ onMounted(() => {
         >
           <span>clear</span>
         </button>
-      </div>
-      <div
-        v-if="mapStore.mapMode === 'circle'"
-        class="mapcontainer-mode-hint"
-      >
-        按住並拖拽來建立圓圈篩選範圍
       </div>
     </div>
 
@@ -234,7 +234,7 @@ onMounted(() => {
 	}
 
 	&-mode-selector {
-		position: fixed;
+		position: absolute;
 		bottom: 20px;
 		left: 50%;
 		transform: translateX(-50%);

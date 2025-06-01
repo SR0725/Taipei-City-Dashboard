@@ -66,7 +66,7 @@ export const parkingComponentTestData = {
 	chart_config: {
 		index: "bussiness_district",
 		types: ["DistrictChart", "ColumnChart", "ParkingMapChart"],
-		color: ["#FFCA9C"],
+		color: ["#F65658","#F49F36","#F5C860","#9AC17C","#4CB495","#569C9A","#60819C","#2F8AB1"],
 		unit: "個",
 	},
 	query_type: "three_d",
@@ -108,10 +108,7 @@ export const parkingComponentTestData = {
 				"circle-stroke-color": "#ffffff",
 			},
 			property: [
-				{ key: "行政區", name: "行政區" },
-				{ key: "地址", name: "地址" },
-				{ key: "面積", name: "面積" },
-				{ key: "radius", name: "半徑" },
+				{ key: "商圈名稱", name: "商圈名稱" },
 			],
 		},
 	],
@@ -130,36 +127,7 @@ export const parkingComponentTestData = {
 	tags: ["停車場", "交通", "地圖", "互動"],
 	contributors: ["doit"],
 	city: "metrotaipei",
-	data: [
-		{
-			name: "15_64歲人口數",
-			icon: "",
-			data: [
-				2274, 662, 138, 118, 1038, 209, 1400, 2420, 123, 33, 40, 34,
-				609, 1687, 38, 1226, 518, 20, 1102, 1259, 3055, 1362, 1117, 909,
-				1059, 621, 731, 62, 1176, 735, 116, 1471, 246, 1382, 553, 951,
-				1137, 446, 2167, 1403, 61,
-			],
-		},
-		{
-			name: "0_14歲人口數",
-			icon: "",
-			data: [
-				12, 292, 333, 120, 176, 322, 183, 5, 236, 168, 245, 190, 549,
-				444, 188, 7, 24, 232, 211, 35, 193, 77, 165, 3, 100, 186, 13,
-				86, 12, 83, 159, 3, 314, 3, 222, 214, 116, 3, 109, 1, 16,
-			],
-		},
-		{
-			name: "65歲以上人口數",
-			icon: "",
-			data: [
-				430, 580, 369, 96, 106, 270, 219, 669, 53, 139, 412, 828, 22,
-				39, 289, 229, 32, 303, 10, 286, 15, 8, 141, 512, 437, 37, 347,
-				104, 387, 574, 15, 64, 423, 18, 523, 417, 19, 233, 536, 35, 190,
-			],
-		},
-	],
+	data: null
 };
 
 export const useContentStore = defineStore("content", {
@@ -220,6 +188,96 @@ export const useContentStore = defineStore("content", {
 		},
 		setMapLayerData(index, component) {
 			this.mapLayers[index] = component;
+		},
+		// 新增方法：計算商圈數據
+		async calculateBussinessDistrictData() {
+			try {
+				// 動態 import mapStore 避免循環引用
+				const mapStoreModule = await import('./mapStore');
+				const mapStore = mapStoreModule.useMapStore();
+
+				// 確保商圈數據已載入
+				if (!mapStore.originalBussinessData) {
+					await mapStore.loadBussinessDistrictData();
+				}
+
+				// 行政區列表
+				const districts = [
+					"北投區", "士林區", "內湖區", "南港區", "松山區", "信義區", 
+					"中山區", "大同區", "中正區", "萬華區", "大安區", "文山區",
+					"新莊區", "淡水區", "汐止區", "板橋區", "三重區", "樹林區", 
+					"土城區", "蘆洲區", "中和區", "永和區", "新店區", "鶯歌區", 
+					"三峽區", "瑞芳區", "五股區", "泰山區", "林口區", "深坑區", 
+					"石碇區", "坪林區", "三芝區", "石門區", "八里區", "平溪區", 
+					"雙溪區", "貢寮區", "金山區", "萬里區", "烏來區"
+				];
+
+				// 初始化每個行政區的計數
+				const districtCounts = new Array(districts.length).fill(0);
+
+				// 計算每個行政區的商圈數量
+				if (mapStore.originalBussinessData && mapStore.originalBussinessData.features) {
+					mapStore.originalBussinessData.features.forEach((feature) => {
+						if (feature.properties) {
+							const district = feature.properties['行政區'];
+							const districtIndex = districts.indexOf(district);
+							if (districtIndex !== -1) {
+								districtCounts[districtIndex]++;
+							}
+						}
+					});
+				}
+
+				console.log( [
+					{
+						name: "商圈數量",
+						icon: "",
+						data: districtCounts,
+					},
+					{
+						name: "",
+						icon: "",
+						data: new Array(districts.length).fill(0),
+					},
+				]);
+
+				return [
+					{
+						name: "商圈數量",
+						icon: "",
+						data: districtCounts,
+					},
+					{
+						name: "",
+						icon: "",
+						data: new Array(districts.length).fill(0),
+					},
+				];
+			} catch (error) {
+				console.error('Error calculating business district data:', error);
+				// 返回空數據以避免錯誤
+				const districts = [
+					"北投區", "士林區", "內湖區", "南港區", "松山區", "信義區", 
+					"中山區", "大同區", "中正區", "萬華區", "大安區", "文山區",
+					"新莊區", "淡水區", "汐止區", "板橋區", "三重區", "樹林區", 
+					"土城區", "蘆洲區", "中和區", "永和區", "新店區", "鶯歌區", 
+					"三峽區", "瑞芳區", "五股區", "泰山區", "林口區", "深坑區", 
+					"石碇區", "坪林區", "三芝區", "石門區", "八里區", "平溪區", 
+					"雙溪區", "貢寮區", "金山區", "萬里區", "烏來區"
+				];
+				return [
+					{
+						name: "商圈數量",
+						icon: "",
+						data: new Array(districts.length).fill(0),
+					},
+					{
+						name: "",
+						icon: "",
+						data: new Array(districts.length).fill(0),
+					},
+				];
+			}
 		},
 		/* Steps in adding content to the application (/dashboard or /mapview) */
 		// 1. Check the current path and execute actions based on the current path
@@ -419,15 +477,15 @@ export const useContentStore = defineStore("content", {
 				) {
 					const component = this.cityDashboard.components[index];
 					try {
-						// 檢查是否為停車場組件，如果是則載入本地 GeoJSON 資料
+						// 檢查是否為商圈組件，如果是則載入本地 GeoJSON 資料並計算
 						if (component.index === "bussiness_district") {
-							this.cityDashboard.components[index].chart_data =
-								parkingComponentTestData.data;
+							// 計算商圈數據
+							const calculatedData = await this.calculateBussinessDistrictData();
+							this.cityDashboard.components[index].chart_data = calculatedData;
 
 							this.cityDashboard.components[
 								index
-							].chart_config.categories =
-								parkingComponentTestData.categories;
+							].chart_config.categories = parkingComponentTestData.categories;
 						} else {
 							// 4-2. Get chart data from API for other components
 							const response = await http.get(
@@ -630,6 +688,13 @@ export const useContentStore = defineStore("content", {
 			}
 
 			try {
+				// 確保商圈數據在地圖模式時載入
+				const mapStoreModule = await import('./mapStore');
+				const mapStore = mapStoreModule.useMapStore();
+				if (!mapStore.originalBussinessData) {
+					await mapStore.loadBussinessDistrictData();
+				}
+
 				if (this.allMapLayers.length === 0) {
 					// No layer data yet, fetch from API
 
@@ -960,6 +1025,10 @@ export const useContentStore = defineStore("content", {
 				this.setDashboards();
 			}
 		},
+
+		async renderBussinessDistrictData() {
+			
+		}
 		/*
 		wsConnect() {
 			const dialogStore = useDialogStore();

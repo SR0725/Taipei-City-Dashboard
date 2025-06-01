@@ -85,6 +85,10 @@ export const useMapStore = defineStore("map", {
 			startPoint: null,
 			currentPoint: null,
 		},
+		// 新增：保存原始數據以支援多次篩選
+		originalLayerData: {},
+		// 新增：保存商圈原始數據
+		originalBussinessData: null,
 	}),
 	actions: {
 		/* Initialize Mapbox */
@@ -206,6 +210,9 @@ export const useMapStore = defineStore("map", {
 				.addLayer(metroTpDistrict);
 
 			this.addSymbolSources();
+
+			// 自動載入商圈數據
+			this.loadBussinessDistrictData();
 		},
 		// 3. Adds symbols that will be used by some map layers
 		addSymbolSources() {
@@ -653,20 +660,11 @@ export const useMapStore = defineStore("map", {
 			)
 				return;
 
-			console.log("Applying circle filter:", {
-				center: this.circleFilter.center,
-				radius: this.circleFilter.radius,
-				visibleLayers: this.currentVisibleLayers,
-			});
-
 			this.currentVisibleLayers.forEach((layerId) => {
 				if (layerId.indexOf("-arc") === -1) {
 					try {
-						// 使用多種方法獲取特徵
-						let features = [];
-
-						// 方法1: 嘗試從 source 獲取所有特徵
-						try {
+						// 首先保存原始數據（如果還沒保存）
+						if (!this.originalLayerData[layerId]) {
 							const source = this.map.getSource(
 								`${layerId}-source`
 							);
@@ -675,56 +673,76 @@ export const useMapStore = defineStore("map", {
 								source._data &&
 								source._data.features
 							) {
-								features = source._data.features;
-								console.log(
-									`Got ${features.length} features from source data for ${layerId}`
-								);
+								this.originalLayerData[layerId] = {
+									type: "FeatureCollection",
+									features: [...source._data.features],
+								};
 							}
-						} catch (e) {
-							console.log(`Method 1 failed for ${layerId}:`, e);
 						}
 
-						// 方法2: 如果方法1沒有數據，嘗試查詢渲染的特徵
-						if (features.length === 0) {
+						// 從原始數據開始篩選，而不是從當前已篩選的數據
+						let features = [];
+						if (this.originalLayerData[layerId]) {
+							features = [
+								...this.originalLayerData[layerId].features,
+							];
+						} else {
+							// 如果沒有保存的原始數據，嘗試獲取當前數據
 							try {
-								features = this.map.querySourceFeatures(
+								const source = this.map.getSource(
 									`${layerId}-source`
 								);
-								console.log(
-									`Got ${features.length} features from querySourceFeatures for ${layerId}`
-								);
+								if (
+									source &&
+									source._data &&
+									source._data.features
+								) {
+									features = [...source._data.features];
+									// 保存為原始數據
+									this.originalLayerData[layerId] = {
+										type: "FeatureCollection",
+										features: [...features],
+									};
+								}
 							} catch (e) {
-								console.log(
-									`Method 2 failed for ${layerId}:`,
+								console.error(
+									`Failed to get original data for ${layerId}:`,
 									e
 								);
 							}
-						}
 
-						// 方法3: 如果仍然沒有數據，嘗試查詢渲染的特徵（指定圖層）
-						if (features.length === 0) {
-							try {
-								features = this.map.queryRenderedFeatures(
-									undefined,
-									{
-										layers: [layerId],
-									}
-								);
-								console.log(
-									`Got ${features.length} features from queryRenderedFeatures for ${layerId}`
-								);
-							} catch (e) {
-								console.log(
-									`Method 3 failed for ${layerId}:`,
-									e
-								);
+							// 如果仍然沒有數據，嘗試其他方法
+							if (features.length === 0) {
+								try {
+									features = this.map.querySourceFeatures(
+										`${layerId}-source`
+									);
+								} catch (e) {
+									console.error(
+										`Method 2 failed for ${layerId}:`,
+										e
+									);
+								}
+							}
+
+							if (features.length === 0) {
+								try {
+									features = this.map.queryRenderedFeatures(
+										undefined,
+										{
+											layers: [layerId],
+										}
+									);
+								} catch (e) {
+									console.error(
+										`Method 3 failed for ${layerId}:`,
+										e
+									);
+								}
 							}
 						}
 
 						if (features.length === 0) {
-							console.log(
-								`No features found for layer ${layerId}`
-							);
 							return;
 						}
 
@@ -779,54 +797,28 @@ export const useMapStore = defineStore("map", {
 							}
 						});
 
-						console.log(
-							`Layer ${layerId}: ${pointsInCircle} points in circle out of ${features.length} total`
-						);
-
-						// 使用更簡單的篩選方式
+						// 使用篩選後的數據更新圖層
 						if (pointsInCircle > 0) {
-							// 如果有匹配的點，創建基於座標的篩選
-							const validCoords = filteredFeatures
-								.map((f) => {
-									if (f.geometry.type === "Point") {
-										return f.geometry.coordinates;
-									}
-									return null;
-								})
-								.filter((coord) => coord !== null);
+							// 創建只包含圓圈內特徵的新 GeoJSON
+							const filteredGeoJSON = {
+								type: "FeatureCollection",
+								features: filteredFeatures,
+							};
 
-							if (validCoords.length > 0) {
-								// 使用距離篩選而不是 ID 篩選
-								const centerLng = this.circleFilter.center.lng;
-								const centerLat = this.circleFilter.center.lat;
-								const radiusInDegrees =
-									this.circleFilter.radius / 111320; // 粗略轉換為度
-
-								this.map.setFilter(layerId, [
-									"<=",
-									[
-										"distance",
-										[
-											"get",
-											"lng",
-											["literal", [centerLng, centerLat]],
-										],
-										[
-											"get",
-											"lat",
-											["literal", [centerLng, centerLat]],
-										],
-									],
-									radiusInDegrees,
-								]);
-							} else {
-								// 如果沒有有效座標，隱藏圖層
-								this.map.setLayoutProperty(
-									layerId,
-									"visibility",
-									"none"
-								);
+							// 更新數據源
+							const source = this.map.getSource(
+								`${layerId}-source`
+							);
+							if (source && source.setData) {
+								source.setData(filteredGeoJSON);
 							}
+
+							// 確保圖層可見
+							this.map.setLayoutProperty(
+								layerId,
+								"visibility",
+								"visible"
+							);
 						} else {
 							// 如果沒有匹配的特徵，隱藏圖層
 							this.map.setLayoutProperty(
@@ -888,6 +880,9 @@ export const useMapStore = defineStore("map", {
 					this.renderDeckGLLayer();
 				}
 			});
+
+			// 新增：更新圖表數據
+			this.updateChartDataBasedOnCircleFilter();
 		},
 
 		// 15. Clear circle filter
@@ -901,9 +896,18 @@ export const useMapStore = defineStore("map", {
 
 			this.removeCircleFromMap();
 
-			// Remove filters from all layers
+			// 恢復所有圖層的原始數據
 			this.currentVisibleLayers.forEach((layerId) => {
 				if (layerId.indexOf("-arc") === -1) {
+					// 恢復原始數據
+					if (this.originalLayerData[layerId]) {
+						const source = this.map.getSource(`${layerId}-source`);
+						if (source && source.setData) {
+							source.setData(this.originalLayerData[layerId]);
+						}
+					}
+
+					// 移除篩選並確保圖層可見
 					this.map.setFilter(layerId, null);
 					this.map.setLayoutProperty(
 						layerId,
@@ -911,7 +915,7 @@ export const useMapStore = defineStore("map", {
 						"visible"
 					);
 				} else {
-					// Restore original data for deck.gl layers
+					// 恢復 deck.gl 圖層的原始數據
 					if (
 						this.deckGlLayer[layerId] &&
 						this.deckGlLayer[layerId].data
@@ -922,6 +926,9 @@ export const useMapStore = defineStore("map", {
 					}
 				}
 			});
+
+			// 新增：重置圖表數據為原始狀態
+			this.resetChartDataToOriginal();
 		},
 
 		/* Adding Map Layers */
@@ -1200,15 +1207,15 @@ export const useMapStore = defineStore("map", {
 			const layers = Object.keys(this.deckGlLayer).map((index) => {
 				const l = this.deckGlLayer[index];
 				switch (l.type) {
-					case "ArcLayer":
-						return new ArcLayer(l.config);
-					case "AnimatedArcLayer":
-						return new AnimatedArcLayer({
-							...l.config,
-							coef: this.step / 1000,
-						});
-					default:
-						break;
+				case "ArcLayer":
+					return new ArcLayer(l.config);
+				case "AnimatedArcLayer":
+					return new AnimatedArcLayer({
+						...l.config,
+						coef: this.step / 1000,
+					});
+				default:
+					break;
 				}
 			});
 			this.overlay.setProps({
@@ -1983,6 +1990,158 @@ export const useMapStore = defineStore("map", {
 			this.currentVisibleLayers = [];
 			this.removePopup();
 			this.tempMarkerCoordinates = null;
+		},
+
+		// 新增方法：載入商圈數據
+		async loadBussinessDistrictData() {
+			try {
+				const response = await axios.get('/mapData/bussiness_district.geojson');
+				this.originalBussinessData = response.data;
+				return response.data;
+			} catch (error) {
+				console.error('Error loading business district data:', error);
+				return null;
+			}
+		},
+
+		// 新增方法：計算圓圈內的商圈數據並更新 contentStore
+		updateChartDataBasedOnCircleFilter() {
+			if (!this.circleFilter.isActive || !this.originalBussinessData) {
+				return;
+			}
+
+			// 使用 pinia 的全局狀態管理來獲取 contentStore
+			import('./contentStore').then(({ useContentStore }) => {
+				const contentStore = useContentStore();
+
+				// 行政區列表
+				const districts = [
+					"北投區", "士林區", "內湖區", "南港區", "松山區", "信義區", 
+					"中山區", "大同區", "中正區", "萬華區", "大安區", "文山區",
+					"新莊區", "淡水區", "汐止區", "板橋區", "三重區", "樹林區", 
+					"土城區", "蘆洲區", "中和區", "永和區", "新店區", "鶯歌區", 
+					"三峽區", "瑞芳區", "五股區", "泰山區", "林口區", "深坑區", 
+					"石碇區", "坪林區", "三芝區", "石門區", "八里區", "平溪區", 
+					"雙溪區", "貢寮區", "金山區", "萬里區", "烏來區"
+				];
+
+				// 初始化每個行政區的計數
+				const districtCounts = new Array(districts.length).fill(0);
+
+				// 篩選圓圈內的商圈
+				if (this.originalBussinessData.features) {
+					this.originalBussinessData.features.forEach((feature) => {
+						if (feature.geometry && feature.geometry.coordinates && feature.properties) {
+							const coords = feature.geometry.coordinates;
+							const pointToCheck = {
+								lng: coords[0],
+								lat: coords[1]
+							};
+
+							// 檢查是否在圓圈內
+							const distance = this.calculateDistance(
+								this.circleFilter.center,
+								pointToCheck
+							);
+
+							if (distance <= this.circleFilter.radius) {
+								// 找到對應的行政區並增加計數
+								const district = feature.properties['行政區'];
+								const districtIndex = districts.indexOf(district);
+								if (districtIndex !== -1) {
+									districtCounts[districtIndex]++;
+								}
+							}
+						}
+					});
+				}
+
+				// 更新 contentStore 中的圖表數據
+				const targetComponentIndex = contentStore.currentDashboard.components?.findIndex(
+					component => component.index === 'bussiness_district'
+				);
+
+				if (targetComponentIndex !== -1) {
+					// 更新圖表數據
+					const updatedChartData = [
+						{
+							name: "商圈數量",
+							icon: "",
+							data: districtCounts,
+						},
+						{
+							name: "",
+							icon: "",
+							data: new Array(districts.length).fill(0),
+						}
+					];
+
+					// 直接更新組件的 chart_data
+					contentStore.currentDashboard.components[targetComponentIndex].chart_data = updatedChartData;
+				}
+			}).catch(error => {
+				console.error('Error updating chart data:', error);
+			});
+		},
+
+		// 新增方法：重置圖表數據為原始狀態
+		resetChartDataToOriginal() {
+			if (!this.originalBussinessData) {
+				return;
+			}
+
+			// 使用 pinia 的全局狀態管理來獲取 contentStore
+			import('./contentStore').then(({ useContentStore }) => {
+				const contentStore = useContentStore();
+
+				// 行政區列表
+				const districts = [
+					"北投區", "士林區", "內湖區", "南港區", "松山區", "信義區", 
+					"中山區", "大同區", "中正區", "萬華區", "大安區", "文山區",
+					"新莊區", "淡水區", "汐止區", "板橋區", "三重區", "樹林區", 
+					"土城區", "蘆洲區", "中和區", "永和區", "新店區", "鶯歌區", 
+					"三峽區", "瑞芳區", "五股區", "泰山區", "林口區", "深坑區", 
+					"石碇區", "坪林區", "三芝區", "石門區", "八里區", "平溪區", 
+					"雙溪區", "貢寮區", "金山區", "萬里區", "烏來區"
+				];
+
+				// 初始化每個行政區的計數
+				const districtCounts = new Array(districts.length).fill(0);
+
+				// 計算所有商圈的數量
+				if (this.originalBussinessData.features) {
+					this.originalBussinessData.features.forEach((feature) => {
+						if (feature.properties) {
+							const district = feature.properties['行政區'];
+							const districtIndex = districts.indexOf(district);
+							if (districtIndex !== -1) {
+								districtCounts[districtIndex]++;
+							}
+						}
+					});
+				}
+
+				// 更新 contentStore 中的圖表數據
+				const targetComponentIndex = contentStore.currentDashboard.components?.findIndex(
+					component => component.index === 'bussiness_district'
+				);
+
+				if (targetComponentIndex !== -1) {
+					// 更新圖表數據
+					const updatedChartData = [
+						{
+							name: "商圈數量",
+							icon: "",
+							data: districtCounts,
+						}
+					];
+
+					// 直接更新組件的 chart_data
+					contentStore.currentDashboard.components[targetComponentIndex].chart_data = updatedChartData;
+				}
+			}).catch(error => {
+				console.error('Error resetting chart data:', error);
+			});
 		},
 	},
 });
