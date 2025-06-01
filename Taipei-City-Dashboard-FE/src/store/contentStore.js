@@ -14,6 +14,122 @@ import { useAuthStore } from "./authStore";
 import { getComponentDataTimeframe } from "../assets/utilityFunctions/dataTimeframe";
 import { CityManager } from "../dashboardComponent/utilities/cityManager";
 
+// 停車場組件測試資料
+export const parkingComponentTestData = {
+	id: 999,
+	index: "bussiness_district",
+	categories: [
+		"北投區",
+		"士林區",
+		"內湖區",
+		"南港區",
+		"松山區",
+		"信義區",
+		"中山區",
+		"大同區",
+		"中正區",
+		"萬華區",
+		"大安區",
+		"文山區",
+		"新莊區",
+		"淡水區",
+		"汐止區",
+		"板橋區",
+		"三重區",
+		"樹林區",
+		"土城區",
+		"蘆洲區",
+		"中和區",
+		"永和區",
+		"新店區",
+		"鶯歌區",
+		"三峽區",
+		"瑞芳區",
+		"五股區",
+		"泰山區",
+		"林口區",
+		"深坑區",
+		"石碇區",
+		"坪林區",
+		"三芝區",
+		"石門區",
+		"八里區",
+		"平溪區",
+		"雙溪區",
+		"貢寮區",
+		"金山區",
+		"萬里區",
+		"烏來區",
+	],
+	name: "台北商圈數量",
+	source: "臺北市商業處",
+	chart_config: {
+		index: "bussiness_district",
+		types: ["DistrictChart", "ColumnChart", "ParkingMapChart"],
+		color: ["#F65658","#F49F36","#F5C860","#9AC17C","#4CB495","#569C9A","#60819C","#2F8AB1"],
+		unit: "個",
+	},
+	query_type: "three_d",
+	map_config: [
+		{
+			index: "bussiness_district",
+			title: "台北商圈",
+			type: "circle",
+			source: "geojson",
+			city: "taipei",
+			paint: {
+				"circle-color": [
+					"case",
+					["get", "handicap_first"],
+					"#2196F3",
+					["get", "pregnancy_first"],
+					"#9C27B0",
+					[">", ["get", "totalcar"], 500],
+					"#4CAF50",
+					[">", ["get", "totalcar"], 100],
+					"#FF9800",
+					"#F44336",
+				],
+				"circle-radius": [
+					"interpolate",
+					["linear"],
+					["get", "totalcar"],
+					0,
+					6,
+					100,
+					8,
+					500,
+					12,
+					1000,
+					16,
+				],
+				"circle-opacity": 0.8,
+				"circle-stroke-width": 2,
+				"circle-stroke-color": "#ffffff",
+			},
+			property: [
+				{ key: "商圈名稱", name: "商圈名稱" },
+			],
+		},
+	],
+	map_filter: null,
+	history_config: null,
+	time_from: "static",
+	time_to: null,
+	update_freq: null,
+	update_freq_unit: null,
+	short_desc: "以互動式圓圈篩選方式顯示臺北市各停車場位置、容量及特殊服務",
+	long_desc:
+		"此組件提供臺北市停車場的互動式地圖視覺化，使用者可透過點擊拖拉的方式創建圓形篩選區域，即時篩選特定範圍內的停車場。停車場以不同顏色和大小標示，反映其容量大小和特殊服務（如身障友善、孕婦友善）。",
+	use_case:
+		"適用於市民查找附近停車場、城市規劃分析停車場分布、交通管理評估停車供需",
+	links: ["https://data.taipei/"],
+	tags: ["停車場", "交通", "地圖", "互動"],
+	contributors: ["doit"],
+	city: "metrotaipei",
+	data: null
+};
+
 export const useContentStore = defineStore("content", {
 	state: () => ({
 		// cityManager is used to manage city settings. (tag, select, sidebar, mobileNavigation etc.)
@@ -73,12 +189,92 @@ export const useContentStore = defineStore("content", {
 		setMapLayerData(index, component) {
 			this.mapLayers[index] = component;
 		},
+		// 新增方法：計算商圈數據
+		async calculateBussinessDistrictData() {
+			try {
+				// 動態 import mapStore 避免循環引用
+				const mapStoreModule = await import('./mapStore');
+				const mapStore = mapStoreModule.useMapStore();
+
+				// 確保商圈數據已載入
+				if (!mapStore.originalBussinessData) {
+					await mapStore.loadBussinessDistrictData();
+				}
+
+				// 行政區列表
+				const districts = [
+					"北投區", "士林區", "內湖區", "南港區", "松山區", "信義區", 
+					"中山區", "大同區", "中正區", "萬華區", "大安區", "文山區",
+					"新莊區", "淡水區", "汐止區", "板橋區", "三重區", "樹林區", 
+					"土城區", "蘆洲區", "中和區", "永和區", "新店區", "鶯歌區", 
+					"三峽區", "瑞芳區", "五股區", "泰山區", "林口區", "深坑區", 
+					"石碇區", "坪林區", "三芝區", "石門區", "八里區", "平溪區", 
+					"雙溪區", "貢寮區", "金山區", "萬里區", "烏來區"
+				];
+
+				// 初始化每個行政區的計數
+				const districtCounts = new Array(districts.length).fill(0);
+
+				// 計算每個行政區的商圈數量
+				if (mapStore.originalBussinessData && mapStore.originalBussinessData.features) {
+					mapStore.originalBussinessData.features.forEach((feature) => {
+						if (feature.properties) {
+							const district = feature.properties['行政區'];
+							const districtIndex = districts.indexOf(district);
+							if (districtIndex !== -1) {
+								districtCounts[districtIndex]++;
+							}
+						}
+					});
+				}
+
+				return [
+					{
+						name: "商圈數量",
+						icon: "",
+						data: districtCounts,
+					},
+					{
+						name: "",
+						icon: "",
+						data: new Array(districts.length).fill(0),
+					},
+				];
+			} catch (error) {
+				console.error('Error calculating business district data:', error);
+				// 返回空數據以避免錯誤
+				const districts = [
+					"北投區", "士林區", "內湖區", "南港區", "松山區", "信義區", 
+					"中山區", "大同區", "中正區", "萬華區", "大安區", "文山區",
+					"新莊區", "淡水區", "汐止區", "板橋區", "三重區", "樹林區", 
+					"土城區", "蘆洲區", "中和區", "永和區", "新店區", "鶯歌區", 
+					"三峽區", "瑞芳區", "五股區", "泰山區", "林口區", "深坑區", 
+					"石碇區", "坪林區", "三芝區", "石門區", "八里區", "平溪區", 
+					"雙溪區", "貢寮區", "金山區", "萬里區", "烏來區"
+				];
+				return [
+					{
+						name: "商圈數量",
+						icon: "",
+						data: new Array(districts.length).fill(0),
+					},
+					{
+						name: "",
+						icon: "",
+						data: new Array(districts.length).fill(0),
+					},
+				];
+			}
+		},
 		/* Steps in adding content to the application (/dashboard or /mapview) */
 		// 1. Check the current path and execute actions based on the current path
 		setRouteParams(mode, index, city) {
 			this.currentDashboard.mode = mode;
 			// 1-1. Don't do anything if the path is the same
-			if (this.currentDashboard.index === index && this.currentDashboard.city === city) {
+			if (
+				this.currentDashboard.index === index &&
+				this.currentDashboard.city === city
+			) {
 				if (
 					this.currentDashboard.mode === "/mapview" &&
 					!index.includes("map-layers")
@@ -114,12 +310,14 @@ export const useContentStore = defineStore("content", {
 			const data = response.data.data || {};
 
 			this.dashboards.clear();
-			
+
 			Object.entries(data).forEach(([key, dashboardArray]) => {
 				// deal with personal dashboard
-				if (key === 'personal') {
-					this.personalDashboards = Array.isArray(dashboardArray) ? dashboardArray : [];
-					
+				if (key === "personal") {
+					this.personalDashboards = Array.isArray(dashboardArray)
+						? dashboardArray
+						: [];
+
 					if (this.personalDashboards.length !== 0) {
 						this.favorites = this.personalDashboards.find(
 							(el) => el.icon === "favorite"
@@ -132,7 +330,10 @@ export const useContentStore = defineStore("content", {
 					// deal with other city dashboard
 					if (Array.isArray(dashboardArray)) {
 						// move map-layers to the end
-						this.dashboards.set(key, this.moveMapLayersToEnd(dashboardArray));
+						this.dashboards.set(
+							key,
+							this.moveMapLayersToEnd(dashboardArray)
+						);
 					} else {
 						this.dashboards.set(key, []);
 					}
@@ -154,11 +355,11 @@ export const useContentStore = defineStore("content", {
 						break;
 					}
 				}
-			
+
 				if (firstCity && firstDashboard) {
 					this.currentDashboard.index = firstDashboard.index;
 					this.currentDashboard.city = firstCity;
-					
+
 					router.replace({
 						query: {
 							index: this.currentDashboard.index,
@@ -167,26 +368,28 @@ export const useContentStore = defineStore("content", {
 					});
 				}
 			}
-			
+
 			// After getting dashboard info, call the setCurrentDashboardAllContent (3.) method to get component info
 			this.setCurrentDashboardAllContent();
 		},
 		// 2-2. Move map-layers to the end of the array
 		moveMapLayersToEnd(dashboards) {
 			if (!Array.isArray(dashboards)) return [];
-			
+
 			// Find the map-layers item
-			const mapLayersItem = dashboards.find(item => 
-				item.index === 'map-layers' || item.index.includes('map-layers')
+			const mapLayersItem = dashboards.find(
+				(item) =>
+					item.index === "map-layers" ||
+					item.index.includes("map-layers")
 			);
-			
+
 			if (mapLayersItem) {
-				const otherItems = dashboards.filter(item => 
-				item.index !== mapLayersItem.index
+				const otherItems = dashboards.filter(
+					(item) => item.index !== mapLayersItem.index
 				);
 				return [...otherItems, mapLayersItem];
 			}
-			
+
 			return dashboards;
 		},
 		// 2-3. Get all dashboards of a city
@@ -195,17 +398,19 @@ export const useContentStore = defineStore("content", {
 		},
 		// 3. Call an API to get all component info of the current index dashboard not filtered by city and store it
 		async setCurrentDashboardAllContent() {
-			const currentCityDashboards = this.currentDashboard.city 
+			const currentCityDashboards = this.currentDashboard.city
 				? this.getDashboardsByCity(this.currentDashboard.city)
 				: this.personalDashboards;
-			const currentDashboardInfo = currentCityDashboards.find(item => item.index === this.currentDashboard.index);
-			
+			const currentDashboardInfo = currentCityDashboards.find(
+				(item) => item.index === this.currentDashboard.index
+			);
+
 			// If the current dashboard is not found, redirect to the first available dashboard
 			if (!currentDashboardInfo) {
 				// Find the first available dashboard
 				let firstCity = null;
 				let firstDashboard = null;
-				
+
 				for (const [city, dashboards] of this.dashboards.entries()) {
 					if (dashboards && dashboards.length > 0) {
 						firstCity = city;
@@ -213,7 +418,7 @@ export const useContentStore = defineStore("content", {
 						break;
 					}
 				}
-				
+
 				if (firstCity && firstDashboard) {
 					router.replace({
 						query: {
@@ -224,21 +429,26 @@ export const useContentStore = defineStore("content", {
 				}
 				return;
 			}
-			
+
 			// Set the current dashboard info
 			this.currentDashboard.name = currentDashboardInfo.name;
 			this.currentDashboard.icon = currentDashboardInfo.icon;
-			
+
 			// Get the dashboard index data
 			try {
 				// 針對目前index 取得不分city的資料
-				const response = await http.get(`/dashboard/${this.currentDashboard.index}`);
-				this.cityDashboard.components = response.data.data || [];
+				const response = await http.get(
+					`/dashboard/${this.currentDashboard.index}`
+				);
+				this.cityDashboard.components = [
+					...(response.data.data || []),
+					parkingComponentTestData,
+				];
 				this.filterCurrentDashboardContent();
 			} catch (error) {
 				console.error("Error getting dashboard index data:", error);
 			}
-			
+
 			// Get the dashboard components data
 			this.setCurrentDashboardAllChartData();
 		},
@@ -254,41 +464,57 @@ export const useContentStore = defineStore("content", {
 				) {
 					const component = this.cityDashboard.components[index];
 					try {
-						// 4-2. Get chart data
-						const response = await http.get(
-							`/component/${component.id}/chart`,
-							{
-								params: {
-									city: component.city,
-									...!["static", "current", "demo"].includes(
-										component.time_from
-									)
-									? getComponentDataTimeframe(
-										component.time_from,
-										component.time_to,
-										true
-									)
-									: {}
-								},
-							}
-						);
+						// 檢查是否為商圈組件，如果是則載入本地 GeoJSON 資料並計算
+						if (component.index === "bussiness_district") {
+							// 計算商圈數據
+							const calculatedData = await this.calculateBussinessDistrictData();
+							this.cityDashboard.components[index].chart_data = calculatedData;
 
-						this.cityDashboard.components[index].chart_data =
-							response.data.data;
-						
-						if (response.data.categories) {
 							this.cityDashboard.components[
 								index
-							].chart_config.categories = response.data.categories;
+							].chart_config.categories = parkingComponentTestData.categories;
+						} else {
+							// 4-2. Get chart data from API for other components
+							const response = await http.get(
+								`/component/${component.id}/chart`,
+								{
+									params: {
+										city: component.city,
+										...(![
+											"static",
+											"current",
+											"demo",
+										].includes(component.time_from)
+											? getComponentDataTimeframe(
+													component.time_from,
+													component.time_to,
+													true
+											  )
+											: {}),
+									},
+								}
+							);
+
+							this.cityDashboard.components[index].chart_data =
+								response.data.data;
+
+							if (response.data.categories) {
+								this.cityDashboard.components[
+									index
+								].chart_config.categories =
+									response.data.categories;
+							}
 						}
 					} catch (error) {
-						console.error(`Failed to fetch chart data for component ${component.id}:`, error);
+						console.error(
+							`Failed to fetch chart data for component ${component.id}:`,
+							error
+						);
 						// Set empty chart data to avoid errors in subsequent operations
 						this.cityDashboard.components[index].chart_data = [];
-						
+
 						this.loading = false;
 					}
-					
 				}
 				for (
 					let index = 0;
@@ -309,14 +535,16 @@ export const useContentStore = defineStore("content", {
 										params: {
 											city: component.city,
 											...getComponentDataTimeframe(
-												component.history_config.range[i],
+												component.history_config.range[
+													i
+												],
 												"now",
 												true
-											)
+											),
 										},
 									}
 								);
-	
+
 								if (i === "0") {
 									this.cityDashboard.components[
 										index
@@ -326,9 +554,14 @@ export const useContentStore = defineStore("content", {
 									index
 								].history_data.push(response.data.data);
 							} catch (error) {
-								console.error(`Failed to fetch history data for component ${component.id} (range ${i}):`, error);
+								console.error(
+									`Failed to fetch history data for component ${component.id} (range ${i}):`,
+									error
+								);
 								// Add empty data to maintain data structure consistency
-								this.cityDashboard.components[index].history_data.push([]);
+								this.cityDashboard.components[
+									index
+								].history_data.push([]);
 							}
 						}
 					}
@@ -344,32 +577,45 @@ export const useContentStore = defineStore("content", {
 			const { components } = this.cityDashboard;
 
 			if (components && components.length > 0) {
-				const currentCityData = components.filter(item => item.city === this.currentDashboard.city);
-				const notCurrentCityData = components.filter(item => item.city !== this.currentDashboard.city);
+				const currentCityData = components.filter(
+					(item) => item.city === this.currentDashboard.city
+				);
+				const notCurrentCityData = components.filter(
+					(item) => item.city !== this.currentDashboard.city
+				);
 
 				// If city is defined, filter components by city
 				if (this.currentDashboard.city) {
 					this.currentDashboard.components = currentCityData;
-					this.currentDashboardExcluded.components = notCurrentCityData;
+					this.currentDashboardExcluded.components =
+						notCurrentCityData;
 				} else {
 					// Is personal dashboard
 
 					const sortedData = [...components].sort((a, b) => {
 						// 如果id不同，保持原有順序
 						if (a.id !== b.id) return 0;
-						
+
 						// 如果id相同，將taipei排在前面，其他排在後面
-						if (a.city === 'taipei' && b.city !== 'taipei') return -1;
-						if (a.city !== 'taipei' && b.city === 'taipei') return 1;
-						
+						if (a.city === "taipei" && b.city !== "taipei")
+							return -1;
+						if (a.city !== "taipei" && b.city === "taipei")
+							return 1;
+
 						return 0;
 					});
 
-					const uniqueData = [...new Map(sortedData.map(item => [item.id, item])).values()];
+					const uniqueData = [
+						...new Map(
+							sortedData.map((item) => [item.id, item])
+						).values(),
+					];
 
 					// 找出被排除的重複資料（city 不同的資料）
-					const excludedData = components.filter(item => {
-						const uniqueItem = uniqueData.find(u => u.id === item.id);
+					const excludedData = components.filter((item) => {
+						const uniqueItem = uniqueData.find(
+							(u) => u.id === item.id
+						);
 						return uniqueItem && uniqueItem.city !== item.city;
 					});
 					this.currentDashboard.components = uniqueData;
@@ -429,35 +675,48 @@ export const useContentStore = defineStore("content", {
 			}
 
 			try {
+				// 確保商圈數據在地圖模式時載入
+				const mapStoreModule = await import('./mapStore');
+				const mapStore = mapStoreModule.useMapStore();
+				if (!mapStore.originalBussinessData) {
+					await mapStore.loadBussinessDistrictData();
+				}
+
 				if (this.allMapLayers.length === 0) {
 					// No layer data yet, fetch from API
 
 					// Get all map layer data for all active cities
 					const responses = await Promise.all(
-						this.cityManager.activeCities.map(city =>
+						this.cityManager.activeCities.map((city) =>
 							http.get(`/dashboard/map-layers-${city}`)
 						)
 					);
 					const uniqueMap = new Map();
-					const mapLayersData = responses.flatMap(response => response.data.data || []);
+					const mapLayersData = responses.flatMap(
+						(response) => response.data.data || []
+					);
 
 					// Filter out duplicate map layers based on id and city
-					const filteredMapLayersData = mapLayersData.filter(item => {
-						const key = `${item.id}_${item.city}`;
-						if (!uniqueMap.has(key)) {
-							uniqueMap.set(key, true);
-							return true;
+					const filteredMapLayersData = mapLayersData.filter(
+						(item) => {
+							const key = `${item.id}_${item.city}`;
+							if (!uniqueMap.has(key)) {
+								uniqueMap.set(key, true);
+								return true;
+							}
+							return false;
 						}
-						return false;
-					});
+					);
 
-					this.allMapLayers = filteredMapLayersData
+					this.allMapLayers = filteredMapLayersData;
 					// Get chart_data for all layers
 					await this.setMapLayersContent(cityValue);
 				} else {
 					// Layer data already exists, filter directly by city
-					const isPersonalDashboard = !cityValue
-					isPersonalDashboard ? this.mapLayers = [] : this.filterMapLayersByCity(cityValue);
+					const isPersonalDashboard = !cityValue;
+					isPersonalDashboard
+						? (this.mapLayers = [])
+						: this.filterMapLayersByCity(cityValue);
 					this.loading = false;
 				}
 			} catch (error) {
@@ -469,37 +728,46 @@ export const useContentStore = defineStore("content", {
 		// Filter layers by city
 		filterMapLayersByCity(city) {
 			// Filter layers of the specified city from allMapLayers
-			this.mapLayers = this.allMapLayers.filter(item => item.city === city);
+			this.mapLayers = this.allMapLayers.filter(
+				(item) => item.city === city
+			);
 		},
 		// 8. Call an API for each map layer component to get its chart data and store it (if in /mapview)
 		async setMapLayersContent(city) {
 			try {
-			  for (let index = 0; index < this.allMapLayers.length; index++) {
-				const component = this.allMapLayers[index];
-				
-				try {
-				  const response = await http.get(
-					`/component/${component.id}/chart`,
-					{
-						params: {
-							city: component.city
-						}
+				for (let index = 0; index < this.allMapLayers.length; index++) {
+					const component = this.allMapLayers[index];
+
+					try {
+						const response = await http.get(
+							`/component/${component.id}/chart`,
+							{
+								params: {
+									city: component.city,
+								},
+							}
+						);
+
+						this.allMapLayers[index].chart_data =
+							response.data.data;
+					} catch (error) {
+						console.error(
+							`Failed to fetch data for component ${component.id}:`,
+							error
+						);
+						// Continue processing the next layer when an error occurs
 					}
-				  );
-				  
-				  this.allMapLayers[index].chart_data = response.data.data;
-				} catch (error) {
-				  console.error(`Failed to fetch data for component ${component.id}:`, error);
-				  // Continue processing the next layer when an error occurs
 				}
-			  }
-			  
-			  // Filter layers by the specified city
-			  this.filterMapLayersByCity(city);
+
+				// Filter layers by the specified city
+				this.filterMapLayersByCity(city);
 			} catch (error) {
-			  console.error("Error occurred during layer data processing:", error);
+				console.error(
+					"Error occurred during layer data processing:",
+					error
+				);
 			} finally {
-			  this.loading = false;
+				this.loading = false;
 			}
 		},
 
@@ -521,14 +789,18 @@ export const useContentStore = defineStore("content", {
 				params,
 			});
 
-			const uniqueData = [...new Map(response.data.data
-				// Sort the data to ensure that items with city 'metrotaipei' are at the end
-				.sort((a) => a.city === 'metrotaipei' ? 1 : -1)
-				// Create a map with item.id as the key to remove duplicates
-				.map(item => [item.id, item]))
-				// Convert the map values back to an array
-				.values()
-			]; 
+			const uniqueData = [
+				...new Map(
+					response.data.data
+						// Sort the data to ensure that items with city 'metrotaipei' are at the end
+						.sort((a) => (a.city === "metrotaipei" ? 1 : -1))
+						// Create a map with item.id as the key to remove duplicates
+						.map((item) => [item.id, item])
+				)
+					// Convert the map values back to an array
+					.values(),
+				parkingComponentTestData,
+			];
 
 			this.components = uniqueData;
 			this.loading = false;
@@ -557,54 +829,63 @@ export const useContentStore = defineStore("content", {
 			}
 
 			dialogStore.moreInfoContent = response_1.data.data;
-			
-			for (let index = 0; index < dialogStore.moreInfoContent.length; index++) {
 
+			for (
+				let index = 0;
+				index < dialogStore.moreInfoContent.length;
+				index++
+			) {
 				const response_2 = await http.get(
 					`/component/${dialogStore.moreInfoContent[index].id}/chart`,
 					{
 						params: {
 							city: dialogStore.moreInfoContent[index].city,
-							...!["static", "current", "demo"].includes(
+							...(!["static", "current", "demo"].includes(
 								dialogStore.moreInfoContent[index].time_from
 							)
-							? getComponentDataTimeframe(
-								dialogStore.moreInfoContent[index].time_from,
-								dialogStore.moreInfoContent[index].time_to,
-								true
-							  )
-							: {}},
+								? getComponentDataTimeframe(
+										dialogStore.moreInfoContent[index]
+											.time_from,
+										dialogStore.moreInfoContent[index]
+											.time_to,
+										true
+								  )
+								: {}),
+						},
 					}
 				);
 
-				dialogStore.moreInfoContent[index].chart_data = response_2.data.data;
+				dialogStore.moreInfoContent[index].chart_data =
+					response_2.data.data;
 
 				if (response_2.data.categories) {
 					dialogStore.moreInfoContent[index].chart_config.categories =
 						response_2.data.categories;
 				}
-	
+
 				// 2-3. Get the component history data if applicable
 				if (dialogStore.moreInfoContent[index].history_config) {
-					for (let i in dialogStore.moreInfoContent[index].history_config
-						.range) {
+					for (let i in dialogStore.moreInfoContent[index]
+						.history_config.range) {
 						const response = await http.get(
 							`/component/${dialogStore.moreInfoContent[index].id}/history`,
 							{
 								params: {
-									city: dialogStore.moreInfoContent[index].city,
+									city: dialogStore.moreInfoContent[index]
+										.city,
 									...getComponentDataTimeframe(
-										dialogStore.moreInfoContent[index].history_config
-											.range[i],
+										dialogStore.moreInfoContent[index]
+											.history_config.range[i],
 										"now",
 										true
-									)
+									),
 								},
 							}
 						);
-	
+
 						if (i === "0") {
-							dialogStore.moreInfoContent[index].history_data = [];
+							dialogStore.moreInfoContent[index].history_data =
+								[];
 						}
 						dialogStore.moreInfoContent[index].history_data.push(
 							response.data.data
@@ -731,6 +1012,10 @@ export const useContentStore = defineStore("content", {
 				this.setDashboards();
 			}
 		},
+
+		async renderBussinessDistrictData() {
+			
+		}
 		/*
 		wsConnect() {
 			const dialogStore = useDialogStore();

@@ -69,6 +69,26 @@ export const useMapStore = defineStore("map", {
 		tempMarkerCoordinates: null,
 		// Store the user's current location,
 		userLocation: { latitude: null, longitude: null },
+		// 新增：地圖模式（normal 或 circle）
+		mapMode: "normal",
+		// 新增：圓圈篩選相關狀態
+		circleFilter: {
+			isActive: false,
+			isDrawing: false,
+			center: null,
+			radius: 0,
+			circleSource: null,
+			circleLayer: null,
+		},
+		// 新增：圓圈繪製時的狀態
+		circleDrawing: {
+			startPoint: null,
+			currentPoint: null,
+		},
+		// 新增：保存原始數據以支援多次篩選
+		originalLayerData: {},
+		// 新增：保存商圈原始數據
+		originalBussinessData: null,
 	}),
 	actions: {
 		/* Initialize Mapbox */
@@ -105,10 +125,16 @@ export const useMapStore = defineStore("map", {
 					this.initializeBasicLayers();
 				})
 				.on("click", (event) => {
-					if (this.popup) {
-						this.popup = null;
-					}
-					this.addPopup(event);
+					this.handleMapClick(event);
+				})
+				.on("mousedown", (event) => {
+					this.handleMapMouseDown(event);
+				})
+				.on("mousemove", (event) => {
+					this.handleMapMouseMove(event);
+				})
+				.on("mouseup", (event) => {
+					this.handleMapMouseUp(event);
 				})
 				.on("dblclick", (event) => {
 					let coordinates = event.lngLat;
@@ -184,6 +210,9 @@ export const useMapStore = defineStore("map", {
 				.addLayer(metroTpDistrict);
 
 			this.addSymbolSources();
+
+			// 自動載入商圈數據
+			this.loadBussinessDistrictData();
 		},
 		// 3. Adds symbols that will be used by some map layers
 		addSymbolSources() {
@@ -215,7 +244,11 @@ export const useMapStore = defineStore("map", {
 					"visible"
 				);
 			} else {
-				this.map.setLayoutProperty("metrotaipei_town", "visibility", "none");
+				this.map.setLayoutProperty(
+					"metrotaipei_town",
+					"visibility",
+					"none"
+				);
 			}
 			// if (status) {
 			// 	this.map.setLayoutProperty(
@@ -236,7 +269,11 @@ export const useMapStore = defineStore("map", {
 					"visible"
 				);
 			} else {
-				this.map.setLayoutProperty("metrotaipei_village", "visibility", "none");
+				this.map.setLayoutProperty(
+					"metrotaipei_village",
+					"visibility",
+					"none"
+				);
 			}
 			// if (status) {
 			// 	this.map.setLayoutProperty(
@@ -265,6 +302,633 @@ export const useMapStore = defineStore("map", {
 			} else {
 				console.error("Geolocation is not supported by this browser.");
 			}
+		},
+
+		/* Circle Mode Functions */
+		// 1. Set map mode (normal or circle)
+		setMapMode(mode) {
+			this.mapMode = mode;
+			if (mode === "normal") {
+				this.clearCircleFilter();
+				// 重新啟用地圖拖拽
+				if (this.map) {
+					this.map.dragPan.enable();
+					this.map.touchZoomRotate.enable();
+					this.removeCircleEventListeners();
+				}
+			} else if (mode === "circle") {
+				// 禁用地圖拖拽以避免與圓圈繪製衝突
+				if (this.map) {
+					this.map.dragPan.disable();
+					this.map.touchZoomRotate.disable();
+					this.addCircleEventListeners();
+				}
+			}
+		},
+
+		// 2. Add circle event listeners to map container
+		addCircleEventListeners() {
+			const mapContainer = this.map.getContainer();
+			if (mapContainer) {
+				mapContainer.addEventListener(
+					"mousedown",
+					this.handleCircleMouseDown.bind(this)
+				);
+				mapContainer.addEventListener(
+					"mousemove",
+					this.handleCircleMouseMove.bind(this)
+				);
+				mapContainer.addEventListener(
+					"mouseup",
+					this.handleCircleMouseUp.bind(this)
+				);
+				mapContainer.style.cursor = "crosshair";
+			}
+		},
+
+		// 3. Remove circle event listeners
+		removeCircleEventListeners() {
+			const mapContainer = this.map.getContainer();
+			if (mapContainer) {
+				mapContainer.removeEventListener(
+					"mousedown",
+					this.handleCircleMouseDown.bind(this)
+				);
+				mapContainer.removeEventListener(
+					"mousemove",
+					this.handleCircleMouseMove.bind(this)
+				);
+				mapContainer.removeEventListener(
+					"mouseup",
+					this.handleCircleMouseUp.bind(this)
+				);
+				mapContainer.style.cursor = "";
+			}
+		},
+
+		// 4. Handle circle mouse down
+		handleCircleMouseDown(event) {
+			if (this.mapMode === "circle") {
+				event.preventDefault();
+				event.stopPropagation();
+
+				// 獲取地圖容器的精確位置
+				const mapContainer = this.map.getContainer();
+				const rect = mapContainer.getBoundingClientRect();
+
+				// 計算相對於地圖容器的座標
+				const x = event.clientX - rect.left;
+				const y = event.clientY - rect.top;
+
+				// 轉換為地理座標
+				const point = this.map.unproject([x, y]);
+				this.circleDrawing.startPoint = point;
+				this.circleFilter.isDrawing = true;
+				this.removeCircleFromMap();
+			}
+		},
+
+		// 5. Handle circle mouse move
+		handleCircleMouseMove(event) {
+			if (
+				this.mapMode === "circle" &&
+				this.circleFilter.isDrawing &&
+				this.circleDrawing.startPoint
+			) {
+				event.preventDefault();
+				event.stopPropagation();
+
+				// 獲取地圖容器的精確位置
+				const mapContainer = this.map.getContainer();
+				const rect = mapContainer.getBoundingClientRect();
+
+				// 計算相對於地圖容器的座標
+				const x = event.clientX - rect.left;
+				const y = event.clientY - rect.top;
+
+				// 轉換為地理座標
+				const point = this.map.unproject([x, y]);
+				this.circleDrawing.currentPoint = point;
+				this.updateCirclePreview();
+			}
+		},
+
+		// 6. Handle circle mouse up
+		handleCircleMouseUp(event) {
+			if (this.mapMode === "circle" && this.circleFilter.isDrawing) {
+				event.preventDefault();
+				event.stopPropagation();
+				this.circleFilter.isDrawing = false;
+				this.finishCircleDrawing();
+			}
+		},
+
+		// 7. Calculate distance between two points (in meters)
+		calculateDistance(point1, point2) {
+			const R = 6371000; // Earth's radius in meters
+			const lat1 = (point1.lat * Math.PI) / 180;
+			const lat2 = (point2.lat * Math.PI) / 180;
+			const deltaLat = ((point2.lat - point1.lat) * Math.PI) / 180;
+			const deltaLng = ((point2.lng - point1.lng) * Math.PI) / 180;
+
+			const a =
+				Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+				Math.cos(lat1) *
+					Math.cos(lat2) *
+					Math.sin(deltaLng / 2) *
+					Math.sin(deltaLng / 2);
+			const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+			return R * c;
+		},
+
+		// 8. Handle map click events (for normal mode)
+		handleMapClick(event) {
+			if (this.mapMode === "normal") {
+				if (this.popup) {
+					this.popup = null;
+				}
+				this.addPopup(event);
+			}
+		},
+
+		// 9. Handle map mouse events (for normal mode)
+		handleMapMouseDown() {
+			// Handle non-circle mode events
+		},
+
+		handleMapMouseMove() {
+			// Handle non-circle mode events
+		},
+
+		handleMapMouseUp() {
+			// Handle non-circle mode events
+		},
+
+		// 10. Update circle preview during drawing
+		updateCirclePreview() {
+			if (
+				!this.circleDrawing.startPoint ||
+				!this.circleDrawing.currentPoint
+			)
+				return;
+
+			const center = this.circleDrawing.startPoint;
+			const radius = this.calculateDistance(
+				center,
+				this.circleDrawing.currentPoint
+			);
+
+			// 優化性能：只更新數據，不重新創建圖層
+			this.updateCircleGeometry("circle-preview", center, radius);
+		},
+
+		// 10.1. Update circle geometry (helper method)
+		updateCircleGeometry(id, center, radius) {
+			const sourceId = `${id}-source`;
+
+			// Create circle geometry
+			const points = 64;
+			const coordinates = [[]];
+
+			for (let i = 0; i <= points; i++) {
+				const angle = (i * 360) / points;
+				const angleRad = (angle * Math.PI) / 180;
+
+				// Calculate point on circle
+				const dx = radius * Math.cos(angleRad);
+				const dy = radius * Math.sin(angleRad);
+
+				// Convert to lat/lng (approximate)
+				const lat = center.lat + dy / 111320;
+				const lng =
+					center.lng +
+					dx / (111320 * Math.cos((center.lat * Math.PI) / 180));
+
+				coordinates[0].push([lng, lat]);
+			}
+
+			const circleGeoJSON = {
+				type: "Feature",
+				geometry: {
+					type: "Polygon",
+					coordinates: coordinates,
+				},
+			};
+
+			// 如果來源已存在，只更新數據
+			if (this.map.getSource(sourceId)) {
+				this.map.getSource(sourceId).setData(circleGeoJSON);
+			} else {
+				// 創建新的來源和圖層
+				this.addCircleToMap(center, radius, id === "circle-preview");
+			}
+		},
+
+		// 11. Finish circle drawing and apply filter
+		finishCircleDrawing() {
+			if (
+				!this.circleDrawing.startPoint ||
+				!this.circleDrawing.currentPoint
+			)
+				return;
+
+			const center = this.circleDrawing.startPoint;
+			const radius = this.calculateDistance(
+				center,
+				this.circleDrawing.currentPoint
+			);
+
+			if (radius > 0) {
+				this.circleFilter.center = center;
+				this.circleFilter.radius = radius;
+				this.circleFilter.isActive = true;
+
+				this.removeCircleFromMap();
+				this.addCircleToMap(center, radius, false);
+				this.applyCircleFilter();
+			}
+
+			this.circleDrawing.startPoint = null;
+			this.circleDrawing.currentPoint = null;
+		},
+
+		// 12. Add circle to map
+		addCircleToMap(center, radius, isPreview = false) {
+			const id = isPreview ? "circle-preview" : "circle-filter";
+			const sourceId = `${id}-source`;
+
+			// Create circle geometry
+			const points = 64;
+			const coordinates = [[]];
+
+			for (let i = 0; i <= points; i++) {
+				const angle = (i * 360) / points;
+				const angleRad = (angle * Math.PI) / 180;
+
+				// Calculate point on circle
+				const dx = radius * Math.cos(angleRad);
+				const dy = radius * Math.sin(angleRad);
+
+				// Convert to lat/lng (approximate)
+				const lat = center.lat + dy / 111320;
+				const lng =
+					center.lng +
+					dx / (111320 * Math.cos((center.lat * Math.PI) / 180));
+
+				coordinates[0].push([lng, lat]);
+			}
+
+			const circleGeoJSON = {
+				type: "Feature",
+				geometry: {
+					type: "Polygon",
+					coordinates: coordinates,
+				},
+			};
+
+			// Add source
+			if (this.map.getSource(sourceId)) {
+				this.map.getSource(sourceId).setData(circleGeoJSON);
+			} else {
+				this.map.addSource(sourceId, {
+					type: "geojson",
+					data: circleGeoJSON,
+				});
+			}
+
+			// Add layer
+			if (!this.map.getLayer(id)) {
+				this.map.addLayer({
+					id: id,
+					type: "fill",
+					source: sourceId,
+					paint: {
+						"fill-color": isPreview ? "#5a9cf8" : "#ff4444",
+						"fill-opacity": 0.2,
+					},
+				});
+
+				// Add border layer
+				this.map.addLayer({
+					id: `${id}-border`,
+					type: "line",
+					source: sourceId,
+					paint: {
+						"line-color": isPreview ? "#5a9cf8" : "#ff4444",
+						"line-width": 2,
+						"line-opacity": 0.8,
+					},
+				});
+			}
+
+			if (!isPreview) {
+				this.circleFilter.circleSource = sourceId;
+				this.circleFilter.circleLayer = id;
+			}
+		},
+
+		// 13. Remove circle from map
+		removeCircleFromMap() {
+			const layers = [
+				"circle-preview",
+				"circle-preview-border",
+				"circle-filter",
+				"circle-filter-border",
+			];
+			const sources = ["circle-preview-source", "circle-filter-source"];
+
+			layers.forEach((layerId) => {
+				if (this.map.getLayer(layerId)) {
+					this.map.removeLayer(layerId);
+				}
+			});
+
+			sources.forEach((sourceId) => {
+				if (this.map.getSource(sourceId)) {
+					this.map.removeSource(sourceId);
+				}
+			});
+		},
+
+		// 14. Apply circle filter to visible layers
+		applyCircleFilter() {
+			if (
+				!this.circleFilter.isActive ||
+				!this.circleFilter.center ||
+				!this.circleFilter.radius
+			)
+				return;
+
+			this.currentVisibleLayers.forEach((layerId) => {
+				if (layerId.indexOf("-arc") === -1) {
+					try {
+						// 首先保存原始數據（如果還沒保存）
+						if (!this.originalLayerData[layerId]) {
+							const source = this.map.getSource(
+								`${layerId}-source`
+							);
+							if (
+								source &&
+								source._data &&
+								source._data.features
+							) {
+								this.originalLayerData[layerId] = {
+									type: "FeatureCollection",
+									features: [...source._data.features],
+								};
+							}
+						}
+
+						// 從原始數據開始篩選，而不是從當前已篩選的數據
+						let features = [];
+						if (this.originalLayerData[layerId]) {
+							features = [
+								...this.originalLayerData[layerId].features,
+							];
+						} else {
+							// 如果沒有保存的原始數據，嘗試獲取當前數據
+							try {
+								const source = this.map.getSource(
+									`${layerId}-source`
+								);
+								if (
+									source &&
+									source._data &&
+									source._data.features
+								) {
+									features = [...source._data.features];
+									// 保存為原始數據
+									this.originalLayerData[layerId] = {
+										type: "FeatureCollection",
+										features: [...features],
+									};
+								}
+							} catch (e) {
+								console.error(
+									`Failed to get original data for ${layerId}:`,
+									e
+								);
+							}
+
+							// 如果仍然沒有數據，嘗試其他方法
+							if (features.length === 0) {
+								try {
+									features = this.map.querySourceFeatures(
+										`${layerId}-source`
+									);
+								} catch (e) {
+									console.error(
+										`Method 2 failed for ${layerId}:`,
+										e
+									);
+								}
+							}
+
+							if (features.length === 0) {
+								try {
+									features = this.map.queryRenderedFeatures(
+										undefined,
+										{
+											layers: [layerId],
+										}
+									);
+								} catch (e) {
+									console.error(
+										`Method 3 failed for ${layerId}:`,
+										e
+									);
+								}
+							}
+						}
+
+						if (features.length === 0) {
+							return;
+						}
+
+						const filteredFeatures = [];
+						let pointsInCircle = 0;
+
+						features.forEach((feature) => {
+							if (
+								feature.geometry &&
+								feature.geometry.coordinates
+							) {
+								const coords = feature.geometry.coordinates;
+								let pointToCheck = null;
+
+								// Handle different geometry types
+								if (feature.geometry.type === "Point") {
+									pointToCheck = {
+										lng: coords[0],
+										lat: coords[1],
+									};
+								} else if (
+									feature.geometry.type === "Polygon" &&
+									coords[0] &&
+									coords[0][0]
+								) {
+									// Use first coordinate of polygon
+									pointToCheck = {
+										lng: coords[0][0][0],
+										lat: coords[0][0][1],
+									};
+								} else if (
+									feature.geometry.type === "LineString" &&
+									coords[0]
+								) {
+									// Use first coordinate of line
+									pointToCheck = {
+										lng: coords[0][0],
+										lat: coords[0][1],
+									};
+								}
+
+								if (pointToCheck) {
+									const distance = this.calculateDistance(
+										this.circleFilter.center,
+										pointToCheck
+									);
+									if (distance <= this.circleFilter.radius) {
+										filteredFeatures.push(feature);
+										pointsInCircle++;
+									}
+								}
+							}
+						});
+
+						// 使用篩選後的數據更新圖層
+						if (pointsInCircle > 0) {
+							// 創建只包含圓圈內特徵的新 GeoJSON
+							const filteredGeoJSON = {
+								type: "FeatureCollection",
+								features: filteredFeatures,
+							};
+
+							// 更新數據源
+							const source = this.map.getSource(
+								`${layerId}-source`
+							);
+							if (source && source.setData) {
+								source.setData(filteredGeoJSON);
+							}
+
+							// 確保圖層可見
+							this.map.setLayoutProperty(
+								layerId,
+								"visibility",
+								"visible"
+							);
+						} else {
+							// 如果沒有匹配的特徵，隱藏圖層
+							this.map.setLayoutProperty(
+								layerId,
+								"visibility",
+								"none"
+							);
+						}
+					} catch (error) {
+						console.error(
+							`Error filtering layer ${layerId}:`,
+							error
+						);
+						// 發生錯誤時隱藏圖層
+						this.map.setLayoutProperty(
+							layerId,
+							"visibility",
+							"none"
+						);
+					}
+				} else {
+					// Handle deck.gl arc layers (保持原有邏輯)
+					const originalData = this.deckGlLayer[layerId].data;
+					this.deckGlLayer[layerId].config.data = originalData.filter(
+						(feature) => {
+							if (
+								feature.geometry &&
+								feature.geometry.coordinates
+							) {
+								const coords = feature.geometry.coordinates;
+								// For arc layers, check both source and target points
+								const sourcePoint = {
+									lng: coords[0][0],
+									lat: coords[0][1],
+								};
+								const targetPoint = {
+									lng: coords[1][0],
+									lat: coords[1][1],
+								};
+
+								const sourceDistance = this.calculateDistance(
+									this.circleFilter.center,
+									sourcePoint
+								);
+								const targetDistance = this.calculateDistance(
+									this.circleFilter.center,
+									targetPoint
+								);
+
+								return (
+									sourceDistance <=
+										this.circleFilter.radius ||
+									targetDistance <= this.circleFilter.radius
+								);
+							}
+							return false;
+						}
+					);
+					this.renderDeckGLLayer();
+				}
+			});
+
+			// 新增：更新圖表數據
+			this.updateChartDataBasedOnCircleFilter();
+		},
+
+		// 15. Clear circle filter
+		clearCircleFilter() {
+			this.circleFilter.isActive = false;
+			this.circleFilter.isDrawing = false;
+			this.circleFilter.center = null;
+			this.circleFilter.radius = 0;
+			this.circleDrawing.startPoint = null;
+			this.circleDrawing.currentPoint = null;
+
+			this.removeCircleFromMap();
+
+			// 恢復所有圖層的原始數據
+			this.currentVisibleLayers.forEach((layerId) => {
+				if (layerId.indexOf("-arc") === -1) {
+					// 恢復原始數據
+					if (this.originalLayerData[layerId]) {
+						const source = this.map.getSource(`${layerId}-source`);
+						if (source && source.setData) {
+							source.setData(this.originalLayerData[layerId]);
+						}
+					}
+
+					// 移除篩選並確保圖層可見
+					this.map.setFilter(layerId, null);
+					this.map.setLayoutProperty(
+						layerId,
+						"visibility",
+						"visible"
+					);
+				} else {
+					// 恢復 deck.gl 圖層的原始數據
+					if (
+						this.deckGlLayer[layerId] &&
+						this.deckGlLayer[layerId].data
+					) {
+						this.deckGlLayer[layerId].config.data =
+							this.deckGlLayer[layerId].data;
+						this.renderDeckGLLayer();
+					}
+				}
+			});
+
+			// 新增：重置圖表數據為原始狀態
+			this.resetChartDataToOriginal();
 		},
 
 		/* Adding Map Layers */
@@ -354,15 +1018,21 @@ export const useMapStore = defineStore("map", {
 							`https://citydashboard.taipei/geo_server/gwc/service/tms/1.0.0/taipei_vioc:${map_config.index}@EPSG:900913@pbf/{z}/{x}/{y}.pbf`,
 						],
 					});
-		
+
 					// 監聽錯誤
-					this.map.on('error', (e) => {
+					this.map.on("error", (e) => {
 						if (e.sourceId === `${map_config.layerId}-source`) {
-							console.error('Source error:', e);
+							console.error("Source error:", e);
 
 							// 清理已添加的源（如果存在）
-							if (this.map.getSource(`${map_config.layerId}-source`)) {
-								this.map.removeSource(`${map_config.layerId}-source`);
+							if (
+								this.map.getSource(
+									`${map_config.layerId}-source`
+								)
+							) {
+								this.map.removeSource(
+									`${map_config.layerId}-source`
+								);
 							}
 							// 從 loadingLayers 中移除
 							this.loadingLayers = this.loadingLayers.filter(
@@ -370,40 +1040,37 @@ export const useMapStore = defineStore("map", {
 							);
 						}
 					});
-		
+
 					// 監聽源加載完成
 					const sourceLoaded = new Promise((resolve, reject) => {
 						const checkSource = (e) => {
 							if (e.sourceId === `${map_config.layerId}-source`) {
 								if (e.isSourceLoaded) {
-									this.map.off('sourcedata', checkSource);
+									this.map.off("sourcedata", checkSource);
 									resolve();
 								}
 								// 如果有錯誤也需要處理
 								if (e.error) {
-									this.map.off('sourcedata', checkSource);
+									this.map.off("sourcedata", checkSource);
 									reject(e.error);
 								}
 							}
 						};
-						
-						this.map.on('sourcedata', checkSource);
-						
+
+						this.map.on("sourcedata", checkSource);
+
 						// 設置超時
 						setTimeout(() => {
-							this.map.off('sourcedata', checkSource);
-							reject(new Error('Source load timeout'));
+							this.map.off("sourcedata", checkSource);
+							reject(new Error("Source load timeout"));
 						}, 10000);
 					});
-		
+
 					// 等待源加載完成後添加圖層
 					await sourceLoaded;
 					this.addMapLayer(map_config);
-
-
-		
 				} catch (error) {
-					console.error('Failed to add source:', error);
+					console.error("Failed to add source:", error);
 					// 清理已添加的源（如果存在）
 					if (this.map.getSource(`${map_config.layerId}-source`)) {
 						this.map.removeSource(`${map_config.layerId}-source`);
@@ -797,8 +1464,8 @@ export const useMapStore = defineStore("map", {
 		// 1. Adds a popup when the user clicks on a item. The event will be passed in.
 		addPopup(event) {
 			const formatValue = (value, key) => {
-				if (key === 'occupied_rate') {
-					return value === -99 ? '-' : value;
+				if (key === "occupied_rate") {
+					return value === -99 ? "-" : value;
 				}
 				return value;
 			};
@@ -827,10 +1494,13 @@ export const useMapStore = defineStore("map", {
 					continue;
 
 				// format properties
-				const feature = {...clickFeatureDatas[i]};
-				feature.properties = {...feature.properties};
-				Object.keys(feature.properties).forEach(key => {
-					feature.properties[key] = formatValue(feature.properties[key], key);
+				const feature = { ...clickFeatureDatas[i] };
+				feature.properties = { ...feature.properties };
+				Object.keys(feature.properties).forEach((key) => {
+					feature.properties[key] = formatValue(
+						feature.properties[key],
+						key
+					);
 				});
 
 				previousParsedLayer = clickFeatureDatas[i].layer.id;
@@ -1320,6 +1990,158 @@ export const useMapStore = defineStore("map", {
 			this.currentVisibleLayers = [];
 			this.removePopup();
 			this.tempMarkerCoordinates = null;
+		},
+
+		// 新增方法：載入商圈數據
+		async loadBussinessDistrictData() {
+			try {
+				const response = await axios.get('/mapData/bussiness_district.geojson');
+				this.originalBussinessData = response.data;
+				return response.data;
+			} catch (error) {
+				console.error('Error loading business district data:', error);
+				return null;
+			}
+		},
+
+		// 新增方法：計算圓圈內的商圈數據並更新 contentStore
+		updateChartDataBasedOnCircleFilter() {
+			if (!this.circleFilter.isActive || !this.originalBussinessData) {
+				return;
+			}
+
+			// 使用 pinia 的全局狀態管理來獲取 contentStore
+			import('./contentStore').then(({ useContentStore }) => {
+				const contentStore = useContentStore();
+
+				// 行政區列表
+				const districts = [
+					"北投區", "士林區", "內湖區", "南港區", "松山區", "信義區", 
+					"中山區", "大同區", "中正區", "萬華區", "大安區", "文山區",
+					"新莊區", "淡水區", "汐止區", "板橋區", "三重區", "樹林區", 
+					"土城區", "蘆洲區", "中和區", "永和區", "新店區", "鶯歌區", 
+					"三峽區", "瑞芳區", "五股區", "泰山區", "林口區", "深坑區", 
+					"石碇區", "坪林區", "三芝區", "石門區", "八里區", "平溪區", 
+					"雙溪區", "貢寮區", "金山區", "萬里區", "烏來區"
+				];
+
+				// 初始化每個行政區的計數
+				const districtCounts = new Array(districts.length).fill(0);
+
+				// 篩選圓圈內的商圈
+				if (this.originalBussinessData.features) {
+					this.originalBussinessData.features.forEach((feature) => {
+						if (feature.geometry && feature.geometry.coordinates && feature.properties) {
+							const coords = feature.geometry.coordinates;
+							const pointToCheck = {
+								lng: coords[0],
+								lat: coords[1]
+							};
+
+							// 檢查是否在圓圈內
+							const distance = this.calculateDistance(
+								this.circleFilter.center,
+								pointToCheck
+							);
+
+							if (distance <= this.circleFilter.radius) {
+								// 找到對應的行政區並增加計數
+								const district = feature.properties['行政區'];
+								const districtIndex = districts.indexOf(district);
+								if (districtIndex !== -1) {
+									districtCounts[districtIndex]++;
+								}
+							}
+						}
+					});
+				}
+
+				// 更新 contentStore 中的圖表數據
+				const targetComponentIndex = contentStore.currentDashboard.components?.findIndex(
+					component => component.index === 'bussiness_district'
+				);
+
+				if (targetComponentIndex !== -1) {
+					// 更新圖表數據
+					const updatedChartData = [
+						{
+							name: "商圈數量",
+							icon: "",
+							data: districtCounts,
+						},
+						{
+							name: "",
+							icon: "",
+							data: new Array(districts.length).fill(0),
+						}
+					];
+
+					// 直接更新組件的 chart_data
+					contentStore.currentDashboard.components[targetComponentIndex].chart_data = updatedChartData;
+				}
+			}).catch(error => {
+				console.error('Error updating chart data:', error);
+			});
+		},
+
+		// 新增方法：重置圖表數據為原始狀態
+		resetChartDataToOriginal() {
+			if (!this.originalBussinessData) {
+				return;
+			}
+
+			// 使用 pinia 的全局狀態管理來獲取 contentStore
+			import('./contentStore').then(({ useContentStore }) => {
+				const contentStore = useContentStore();
+
+				// 行政區列表
+				const districts = [
+					"北投區", "士林區", "內湖區", "南港區", "松山區", "信義區", 
+					"中山區", "大同區", "中正區", "萬華區", "大安區", "文山區",
+					"新莊區", "淡水區", "汐止區", "板橋區", "三重區", "樹林區", 
+					"土城區", "蘆洲區", "中和區", "永和區", "新店區", "鶯歌區", 
+					"三峽區", "瑞芳區", "五股區", "泰山區", "林口區", "深坑區", 
+					"石碇區", "坪林區", "三芝區", "石門區", "八里區", "平溪區", 
+					"雙溪區", "貢寮區", "金山區", "萬里區", "烏來區"
+				];
+
+				// 初始化每個行政區的計數
+				const districtCounts = new Array(districts.length).fill(0);
+
+				// 計算所有商圈的數量
+				if (this.originalBussinessData.features) {
+					this.originalBussinessData.features.forEach((feature) => {
+						if (feature.properties) {
+							const district = feature.properties['行政區'];
+							const districtIndex = districts.indexOf(district);
+							if (districtIndex !== -1) {
+								districtCounts[districtIndex]++;
+							}
+						}
+					});
+				}
+
+				// 更新 contentStore 中的圖表數據
+				const targetComponentIndex = contentStore.currentDashboard.components?.findIndex(
+					component => component.index === 'bussiness_district'
+				);
+
+				if (targetComponentIndex !== -1) {
+					// 更新圖表數據
+					const updatedChartData = [
+						{
+							name: "商圈數量",
+							icon: "",
+							data: districtCounts,
+						}
+					];
+
+					// 直接更新組件的 chart_data
+					contentStore.currentDashboard.components[targetComponentIndex].chart_data = updatedChartData;
+				}
+			}).catch(error => {
+				console.error('Error resetting chart data:', error);
+			});
 		},
 	},
 });

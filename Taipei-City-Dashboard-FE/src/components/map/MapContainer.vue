@@ -45,6 +45,10 @@ function toggleVillageLayer() {
 	mapStore.toggleVillageBoundaries(villageLayer.value);
 }
 
+function handleModeChange(mode) {
+	mapStore.setMapMode(mode);
+}
+
 watch(
 	() => route.query?.city,
 	(newValue) => {
@@ -130,6 +134,38 @@ onMounted(() => {
       <FindClosestPoint />
     </div>
 
+    <!-- 新增的模式選擇器 -->
+    <div class="mapcontainer-mode-selector">
+      <div class="mapcontainer-mode-selector-content">
+        <button
+          :class="{ active: mapStore.mapMode === 'normal' }"
+          @click="handleModeChange('normal')"
+        >
+          <img
+            src="/images/icons/my_location_24dp_FFFFFF_FILL0_wght400_GRAD0_opsz24.svg"
+            alt="my_location"
+          >
+        </button>
+        <button
+          :class="{ active: mapStore.mapMode === 'circle' }"
+          @click="handleModeChange('circle')"
+        >
+          <img
+            src="/images/icons/lasso_select_24dp_FFFFFF_FILL0_wght400_GRAD0_opsz24.svg"
+            alt="lasso_select"
+          >
+        </button>
+        <button
+          v-if="mapStore.mapMode === 'circle' && mapStore.circleFilter.isActive"
+          class="clear-filter"
+          title="清除圓圈篩選"
+          @click="mapStore.clearCircleFilter"
+        >
+          <span>clear</span>
+        </button>
+      </div>
+    </div>
+
     <div class="mapcontainer-controls hide-if-mobile">
       <button
         @click="
@@ -194,6 +230,78 @@ onMounted(() => {
 
 		@media (max-width: 1000px) {
 			height: 100%;
+		}
+	}
+
+	&-mode-selector {
+		position: absolute;
+		bottom: 20px;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 100;
+		background-color: var(--color-component-background);
+		border-radius: 8px;
+		padding: 8px;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+		border: 1px solid var(--color-border);
+
+		&-content {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+
+			button {
+				height: 2rem;
+				padding: 4px 12px;
+				border-radius: 4px;
+				background-color: transparent;
+				color: var(--color-complement-text);
+				cursor: pointer;
+				border: 1px solid var(--color-border);
+				transition: all 0.2s;
+				font-size: var(--font-ms);
+
+				&.active {
+					background-color: var(--color-highlight);
+					color: white;
+					border-color: var(--color-highlight);
+				}
+
+				&.clear-filter {
+					background-color: #ff4444;
+					color: white;
+					border-color: #ff4444;
+					padding: 4px 8px;
+
+					span {
+						font-family: var(--font-icon);
+						font-size: 1rem;
+					}
+
+					&:hover {
+						background-color: #ff6666;
+					}
+				}
+
+				&:hover:not(.active) {
+					background-color: var(--color-border);
+				}
+			}
+		}
+
+		&-hint {
+			margin-top: 4px;
+			font-size: var(--font-s);
+			color: var(--color-complement-text);
+			text-align: center;
+		}
+
+		@media (max-width: 1000px) {
+			bottom: 80px;
+			left: 10px;
+			right: 10px;
+			transform: none;
+			width: auto;
 		}
 	}
 

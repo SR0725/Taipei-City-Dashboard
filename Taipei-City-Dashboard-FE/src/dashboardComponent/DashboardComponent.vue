@@ -28,6 +28,7 @@ import BarChartWithGoal from "./components/BarChartWithGoal.vue";
 import IconPercentChart from "./components/IconPercentChart.vue";
 import IndicatorChart from "./components/IndicatorChart.vue";
 import TextUnitChart from "./components/TextUnitChart.vue";
+import ParkingMapChart from "./components/ParkingMapChart.vue";
 
 import MapLegendSvg from "./assets/chart/MapLegend.svg";
 import DistrictChartSvg from "./assets/chart/DistrictChart.svg";
@@ -49,7 +50,6 @@ import TreemapChartSvg from "./assets/chart/TreemapChart.svg";
 import IndicatorChartSvg from "./assets/chart/IndicatorChart.svg";
 import TextUnitChartSvg from "./assets/chart/TextUnitChart.svg";
 
-
 const props = defineProps({
 	style: { type: Object, default: () => ({}) },
 	mode: {
@@ -63,8 +63,8 @@ const props = defineProps({
 	config: { type: Object, required: true },
 	selectBtn: { type: Boolean, default: false },
 	selectBtnDisabled: { type: Boolean, default: false },
-	selectBtnList: { type: Array, default: () => ([])  },
-	cityTag: { type: Array, default: () => ([]) },
+	selectBtnList: { type: Array, default: () => [] },
+	cityTag: { type: Array, default: () => [] },
 	favoriteBtn: { type: Boolean, default: false },
 	isFavorite: { type: Boolean, default: false },
 	deleteBtn: { type: Boolean, default: false },
@@ -73,7 +73,7 @@ const props = defineProps({
 	infoBtnText: { type: String, default: "組件資訊" },
 	toggleDisable: { type: Boolean, default: false },
 	footer: { type: Boolean, default: true },
-	activeCity: { type: String, default: '' },
+	activeCity: { type: String, default: "" },
 	toggleOn: { type: Boolean, default: false },
 });
 
@@ -88,7 +88,7 @@ const emits = defineEmits([
 	"clearByParamFilter",
 	"clearByLayerFilter",
 	"fly",
-	"changeCity"
+	"changeCity",
 ]);
 
 const activeChart = ref(props.config.chart_config.types[0]);
@@ -220,6 +220,8 @@ function returnChartComponent(name, svg) {
 		return svg ? IndicatorChartSvg : IndicatorChart;
 	case "TextUnitChart":
 		return svg ? TextUnitChartSvg : TextUnitChart;
+	case "ParkingMapChart":
+		return svg ? MapLegendSvg : ParkingMapChart;
 	default:
 		return svg ? MapLegendSvg : MapLegend;
 	}
@@ -281,7 +283,7 @@ function returnChartComponent(name, svg) {
             class="city-tag-container"
           >
             <ComponentTag
-              v-for=" city in props.cityTag"
+              v-for="city in props.cityTag"
               :key="city"
               :icon="''"
               :text="city.name"
@@ -335,10 +337,7 @@ function returnChartComponent(name, svg) {
     </div>
     <!-- Control Buttons -->
     <div
-      v-if="
-        (!mode.includes('map') || toggleOn) &&
-          mode !== 'preview'
-      "
+      v-if="(!mode.includes('map') || toggleOn) && mode !== 'preview'"
       class="dashboardcomponent-control"
     >
       <select
@@ -346,7 +345,7 @@ function returnChartComponent(name, svg) {
         v-model="activeCity"
         name="city"
         class="selectBtn"
-        :class="{'selectBtn-disabled': selectBtnDisabled}"
+        :class="{ 'selectBtn-disabled': selectBtnDisabled }"
       >
         <template
           v-for="city in props.selectBtnList"
@@ -366,7 +365,8 @@ function returnChartComponent(name, svg) {
           :key="`${config.index}-${item}-button`"
           :class="{
             'dashboardcomponent-control-group-button': true,
-            'dashboardcomponent-control-group-active': activeChart === item,
+            'dashboardcomponent-control-group-active':
+              activeChart === item,
           }"
           @click="changeActiveChart(item)"
         >
@@ -379,9 +379,7 @@ function returnChartComponent(name, svg) {
       v-if="mode === 'preview'"
       class="preview-content"
     >
-      <div
-        class="preview-content-id"
-      >
+      <div class="preview-content-id">
         <div
           v-if="mode === 'preview'"
           class="city-tag-container-preview"
@@ -485,7 +483,11 @@ function returnChartComponent(name, svg) {
           class="hide-if-mobile"
         />
         <ComponentTag
-          v-if="config.map_config && config.map_config[0] !== null && config.map_config?.length > 0"
+          v-if="
+            config.map_config &&
+              config.map_config[0] !== null &&
+              config.map_config?.length > 0
+          "
           :icon="mode === 'preview' ? '' : 'map'"
           text="空間資料"
           class="hide-if-mobile"
@@ -641,10 +643,7 @@ button:hover {
 			button span {
 				color: var(--color-complement-text);
 				font-family: var(--font-icon);
-				font-size: calc(
-					var(--font-l) *
-						var(--font-to-icon)
-				);
+				font-size: calc(var(--font-l) * var(--font-to-icon));
 				transition: color 0.2s;
 
 				&:hover {
@@ -715,13 +714,13 @@ button:hover {
 				text-align: center;
 				transition: color 0.2s, opacity 0.2s;
 				user-select: none;
-	
+
 				&:hover {
 					opacity: 1;
 					color: white;
 				}
 			}
-	
+
 			&-active {
 				background-color: var(--color-complement-text);
 				color: white;
@@ -938,9 +937,7 @@ button:hover {
 				width: 40px;
 				height: 40px;
 				border-radius: 5px;
-				background-color: var(
-					--color-complement-text
-				);
+				background-color: var(--color-complement-text);
 			}
 		}
 	}
@@ -952,7 +949,7 @@ button:hover {
 			margin: 4px 0;
 			display: flex;
 			gap: 5px;
-	
+
 			div:first-child {
 				margin-left: 5px;
 			}

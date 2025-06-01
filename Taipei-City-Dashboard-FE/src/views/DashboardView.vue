@@ -22,6 +22,7 @@ const contentStore = useContentStore();
 const dialogStore = useDialogStore();
 const authStore = useAuthStore();
 
+
 function handleOpenSettings() {
 	contentStore.editDashboard = JSON.parse(
 		JSON.stringify(contentStore.currentDashboard)
@@ -63,9 +64,21 @@ function handleMoreInfo(item) {
       :info-btn="true"
       :active-city="item.city"
       :select-btn="true"
-      :select-btn-disabled="contentStore.cityManager.getSelectList(contentStore.currentDashboard?.city).length === 1"
-      :select-btn-list="contentStore.cityManager.getSelectList(contentStore.currentDashboard?.city)"
-      :city-tag="contentStore.cityManager.getTagList(contentStore.currentDashboard?.city)"
+      :select-btn-disabled="
+        contentStore.cityManager.getSelectList(
+          contentStore.currentDashboard?.city
+        ).length === 1
+      "
+      :select-btn-list="
+        contentStore.cityManager.getSelectList(
+          contentStore.currentDashboard?.city
+        )
+      "
+      :city-tag="
+        contentStore.cityManager.getTagList(
+          contentStore.currentDashboard?.city
+        )
+      "
       :favorite-btn="authStore.token ? true : false"
       :is-favorite="contentStore.favorites?.components.includes(item.id)"
       @favorite="
@@ -78,28 +91,41 @@ function handleMoreInfo(item) {
           handleMoreInfo(item);
         }
       "
-      @change-city="(city)=> {
-        const selectedData = contentStore.cityDashboard.components.find((data) => {
-          if (data.index === item.index && data.city === city) {
-            return data
+      @change-city="
+        (city) => {
+          const selectedData =
+            contentStore.cityDashboard.components.find((data) => {
+              if (
+                data.index === item.index &&
+                data.city === city
+              ) {
+                return data;
+              }
+            });
+
+          const componentIndex =
+            contentStore.currentDashboard.components.findIndex(
+              (item) => item.id === selectedData.id
+            );
+
+          if (selectedData) {
+            contentStore.setComponentData(
+              componentIndex,
+              selectedData
+            );
           }
-        });
-
-        const componentIndex = contentStore.currentDashboard.components.findIndex(
-          (item) => item.id === selectedData.id
-        );
-
-        if (selectedData) {
-          contentStore.setComponentData(componentIndex, selectedData);
         }
-      }"
+      "
     />
     <MoreInfo />
     <ReportIssue />
   </div>
   <!-- 2. Dashboards that have components -->
   <div
-    v-else-if="contentStore.currentDashboard.components?.length !== 0 || contentStore.cityDashboard.components?.length !== 0"
+    v-else-if="
+      contentStore.currentDashboard.components?.length !== 0 ||
+        contentStore.cityDashboard.components?.length !== 0
+    "
     class="dashboard"
   >
     <DashboardComponent
@@ -109,14 +135,29 @@ function handleMoreInfo(item) {
       :info-btn="true"
       :active-city="item.city"
       :select-btn="true"
-      :select-btn-disabled="contentStore.cityManager.getSelectList(contentStore.currentDashboard?.city).length === 1 || contentStore.currentDashboardExcluded.components.filter((data) => data.index === item.index).length === 0"
-      :select-btn-list="contentStore.currentDashboard?.city
-        ? contentStore.cityManager.getSelectList(contentStore.currentDashboard?.city)
-        : contentStore.cityManager.getCities(contentStore.cityManager.activeCities)
+      :select-btn-disabled="
+        contentStore.cityManager.getSelectList(
+          contentStore.currentDashboard?.city
+        ).length === 1 ||
+          contentStore.currentDashboardExcluded.components.filter(
+            (data) => data.index === item.index
+          ).length === 0
       "
-      :city-tag="contentStore.currentDashboard?.city
-        ? contentStore.cityManager.getTagList(contentStore.currentDashboard?.city)
-        : contentStore.cityManager.getTagList(item.city)
+      :select-btn-list="
+        contentStore.currentDashboard?.city
+          ? contentStore.cityManager.getSelectList(
+            contentStore.currentDashboard?.city
+          )
+          : contentStore.cityManager.getCities(
+            contentStore.cityManager.activeCities
+          )
+      "
+      :city-tag="
+        contentStore.currentDashboard?.city
+          ? contentStore.cityManager.getTagList(
+            contentStore.currentDashboard?.city
+          )
+          : contentStore.cityManager.getTagList(item.city)
       "
       :delete-btn="
         contentStore.personalDashboards
@@ -143,21 +184,30 @@ function handleMoreInfo(item) {
           contentStore.deleteComponent(id);
         }
       "
-      @change-city="(city)=> {
-        const selectedData = contentStore.cityDashboard.components.find((data) => {
-          if (data.index === item.index && data.city === city) {
-            return data
+      @change-city="
+        (city) => {
+          const selectedData =
+            contentStore.cityDashboard.components.find((data) => {
+              if (
+                data.index === item.index &&
+                data.city === city
+              ) {
+                return data;
+              }
+            });
+
+          const componentIndex =
+            contentStore.currentDashboard.components.findIndex(
+              (item) => item.id === selectedData.id
+            );
+
+          if (selectedData) {
+            contentStore.setComponentData(
+              componentIndex,
+              selectedData
+            );
           }
-        });
-
-        const componentIndex = contentStore.currentDashboard.components.findIndex(
-          (item) => item.id === selectedData.id
-        );
-
-        if (selectedData) {
-          contentStore.setComponentData(componentIndex, selectedData);
         }
-      }
       "
     />
     <MoreInfo />
