@@ -1,180 +1,19 @@
 <!-- Developed by Taipei Urban Intelligence Center 2023-2024 -->
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
+import { ref, onMounted, onBeforeUnmount } from "vue";
 import { useMapStore } from "../../store/mapStore";
 
-const props = defineProps(["chart_config", "series", "map_config"]);
 
 const mapStore = useMapStore();
-const mapContainer = ref(null);
 const isDragging = ref(false);
 const circleCenter = ref(null);
 const circleRadius = ref(0);
 const filteredParking = ref([]);
-const dragStart = ref(null);
 const processedSeries = ref([]);
-
-// 計算在圓圈範圍內的停車場
-const parkingInCircle = computed(() => {
-	if (!circleCenter.value || circleRadius.value === 0) {
-		return processedSeries.value || [];
-	}
-
-	return (processedSeries.value || []).filter((parking) => {
-		if (!parking.coordinates) return false;
-
-		const { lat, lng } = circleCenter.value;
-		const [longitude, latitude] = parking.coordinates;
-		const distance = calculateDistance(lat, lng, latitude, longitude);
-
-		return distance <= circleRadius.value;
-	});
-});
-
-// 計算兩點間的距離（使用 Haversine 公式）
-function calculateDistance(lat1, lng1, lat2, lng2) {
-	const R = 6371000; // 地球半徑（公尺）
-	const dLat = ((lat2 - lat1) * Math.PI) / 180;
-	const dLng = ((lng2 - lng1) * Math.PI) / 180;
-	const a =
-		Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-		Math.cos((lat1 * Math.PI) / 180) *
-			Math.cos((lat2 * Math.PI) / 180) *
-			Math.sin(dLng / 2) *
-			Math.sin(dLng / 2);
-	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-	return R * c;
-}
-
-// 處理滑鼠按下事件
-function handleMouseDown(event) {
-	if (!mapStore.map) return;
-
-	const rect = mapContainer.value.getBoundingClientRect();
-	const point = {
-		x: event.clientX - rect.left,
-		y: event.clientY - rect.top,
-	};
-
-	const lngLat = mapStore.map.unproject(point);
-
-	isDragging.value = true;
-	dragStart.value = { x: point.x, y: point.y };
-	circleCenter.value = { lng: lngLat.lng, lat: lngLat.lat };
-	circleRadius.value = 0;
-
-	document.addEventListener("mousemove", handleMouseMove);
-	document.addEventListener("mouseup", handleMouseUp);
-
-	event.preventDefault();
-	event.stopPropagation();
-}
-
-// 處理滑鼠移動事件
-function handleMouseMove(event) {
-	if (!isDragging.value || !dragStart.value || !mapStore.map) return;
-
-	const rect = mapContainer.value.getBoundingClientRect();
-	const currentPoint = {
-		x: event.clientX - rect.left,
-		y: event.clientY - rect.top,
-	};
-
-	// 計算拖拉距離
-	const deltaX = currentPoint.x - dragStart.value.x;
-	const deltaY = currentPoint.y - dragStart.value.y;
-	const pixelDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-
-	// 轉換為地理距離（粗略計算）
-	const metersPerPixel =
-		(156543.03392 * Math.cos((circleCenter.value.lat * Math.PI) / 180)) /
-		Math.pow(2, mapStore.map.getZoom());
-	circleRadius.value = pixelDistance * metersPerPixel;
-
-	updateCircleLayer();
-
-	event.preventDefault();
-}
-
-// 處理滑鼠釋放事件
-function handleMouseUp() {
-	isDragging.value = false;
-	dragStart.value = null;
-
-	document.removeEventListener("mousemove", handleMouseMove);
-	document.removeEventListener("mouseup", handleMouseUp);
-
-	// 篩選停車場
-	filteredParking.value = parkingInCircle.value;
-	updateParkingLayers();
-}
-
-// 更新圓圈圖層
-function updateCircleLayer() {
-	if (!mapStore.map || !circleCenter.value || circleRadius.value === 0)
-		return;
-
-	const circleId = "parking-filter-circle";
-
-	// 移除舊的圓圈
-	if (mapStore.map.getLayer(circleId)) {
-		mapStore.map.removeLayer(circleId);
-	}
-	if (mapStore.map.getSource(`${circleId}-source`)) {
-		mapStore.map.removeSource(`${circleId}-source`);
-	}
-
-	// 創建圓圈幾何
-	const steps = 64;
-	const coordinates = [];
-	for (let i = 0; i < steps; i++) {
-		const angle = (i / steps) * 2 * Math.PI;
-		const dx = circleRadius.value * Math.cos(angle);
-		const dy = circleRadius.value * Math.sin(angle);
-
-		// 轉換為經緯度偏移
-		const { lng, lat } = circleCenter.value;
-		const dlng = dx / (111320 * Math.cos((lat * Math.PI) / 180));
-		const dlat = dy / 110540;
-
-		coordinates.push([lng + dlng, lat + dlat]);
-	}
-	coordinates.push(coordinates[0]); // 閉合圓圈
-
-	// 添加圓圈到地圖
-	mapStore.map.addSource(`${circleId}-source`, {
-		type: "geojson",
-		data: {
-			type: "Feature",
-			geometry: {
-				type: "Polygon",
-				coordinates: [coordinates],
-			},
-		},
-	});
-
-	mapStore.map.addLayer({
-		id: circleId,
-		type: "fill",
-		source: `${circleId}-source`,
-		paint: {
-			"fill-color": "#007cbf",
-			"fill-opacity": 0.2,
-		},
-	});
-
-	mapStore.map.addLayer({
-		id: `${circleId}-outline`,
-		type: "line",
-		source: `${circleId}-source`,
-		paint: {
-			"line-color": "#007cbf",
-			"line-width": 2,
-			"line-dasharray": [2, 2],
-		},
-	});
-}
+// 懸停狀態管理
+const hoveredParkingId = ref(null);
+const hoverCircleVisible = ref(false);
 
 // 更新停車場圖層
 function updateParkingLayers() {
@@ -283,6 +122,9 @@ function updateParkingLayers() {
 			},
 		});
 	}
+
+	// 設置懸停事件監聽器（在圖層創建後）
+	setupParkingHoverEvents();
 }
 
 // 清除篩選
@@ -308,13 +150,21 @@ function clearFilter() {
 }
 
 // 初始化地圖
-function initializeParkingMap() {
+async function initializeParkingMap() {
 	if (!mapStore.map) return;
 
+	// 載入本地 GeoJSON 資料
+	const response = await fetch(
+		"/mapData/bussiness_district.geojson"
+	);
+	const geojsonData = await response.json();
+
+	const series = geojsonData.features;
+
 	// 轉換 props.series 格式
-	if (props.series && props.series.length > 0) {
+	if (series && series.length > 0) {
 		// 確保每個停車場都有座標資訊
-		const parkingData = props.series.map((item) => {
+		const parkingData = series.map((item) => {
 			// 從 GeoJSON 格式轉換座標
 			let coordinates = [121.517, 25.0478]; // 預設台北車站座標
 
@@ -343,24 +193,127 @@ function initializeParkingMap() {
 	}
 }
 
-// 監聽地圖變化
-watch(
-	() => mapStore.map,
-	(newMap) => {
-		if (newMap) {
-			initializeParkingMap();
-		}
-	}
-);
+onMounted(() => {
+	initializeParkingMap();
+});
 
-// 監聽 props.series 變化
-watch(
-	() => props.series,
-	() => {
-		initializeParkingMap();
-	},
-	{ deep: true }
-);
+// 創建 1200 公尺圓圈
+function createHoverCircle(center) {
+	if (!mapStore.map || !center) return;
+
+	const hoverCircleId = "parking-hover-circle";
+	const radius = 1200; // 1200 公尺
+
+	// 移除舊的懸停圓圈
+	removeHoverCircle();
+
+	// 創建圓圈幾何
+	const steps = 64;
+	const coordinates = [];
+	for (let i = 0; i < steps; i++) {
+		const angle = (i / steps) * 2 * Math.PI;
+		const dx = radius * Math.cos(angle);
+		const dy = radius * Math.sin(angle);
+
+		// 轉換為經緯度偏移
+		const dlng = dx / (111320 * Math.cos((center[1] * Math.PI) / 180));
+		const dlat = dy / 110540;
+
+		coordinates.push([center[0] + dlng, center[1] + dlat]);
+	}
+	coordinates.push(coordinates[0]); // 閉合圓圈
+
+	// 添加圓圈到地圖
+	mapStore.map.addSource(`${hoverCircleId}-source`, {
+		type: "geojson",
+		data: {
+			type: "Feature",
+			geometry: {
+				type: "Polygon",
+				coordinates: [coordinates],
+			},
+		},
+	});
+
+	// 添加圓圈邊框圖層
+	mapStore.map.addLayer({
+		id: `${hoverCircleId}-outline`,
+		type: "line",
+		source: `${hoverCircleId}-source`,
+		paint: {
+			"line-color": "#FF5722",
+			"line-width": 3,
+			"line-opacity": 0.8,
+			"line-dasharray": [4, 4],
+		},
+	});
+
+	// 添加半透明填充
+	mapStore.map.addLayer({
+		id: hoverCircleId,
+		type: "fill",
+		source: `${hoverCircleId}-source`,
+		paint: {
+			"fill-color": "#FF5722",
+			"fill-opacity": 0.1,
+		},
+	});
+
+	hoverCircleVisible.value = true;
+}
+
+// 移除懸停圓圈
+function removeHoverCircle() {
+	if (!mapStore.map) return;
+
+	const hoverCircleId = "parking-hover-circle";
+	
+	// 移除圓圈圖層
+	[hoverCircleId, `${hoverCircleId}-outline`].forEach((id) => {
+		if (mapStore.map.getLayer(id)) {
+			mapStore.map.removeLayer(id);
+		}
+	});
+	
+	if (mapStore.map.getSource(`${hoverCircleId}-source`)) {
+		mapStore.map.removeSource(`${hoverCircleId}-source`);
+	}
+
+	hoverCircleVisible.value = false;
+}
+
+// 處理停車場點位懸停事件
+function setupParkingHoverEvents() {
+	if (!mapStore.map) return;
+
+	const layerIds = ["filtered-parking", "all-parking"];
+
+	layerIds.forEach((layerId) => {
+		// 滑鼠進入事件
+		mapStore.map.on("mouseenter", layerId, (e) => {
+			if (isDragging.value) return; // 拖拉時不顯示懸停圓圈
+
+			// 改變游標樣式
+			mapStore.map.getCanvas().style.cursor = "pointer";
+
+			// 獲取停車場座標
+			const coordinates = e.features[0].geometry.coordinates.slice();
+			const parkingId = e.features[0].properties.source_id || e.features[0].properties.id;
+
+			hoveredParkingId.value = parkingId;
+			createHoverCircle(coordinates);
+		});
+
+		// 滑鼠離開事件
+		mapStore.map.on("mouseleave", layerId, () => {
+			// 恢復游標樣式
+			mapStore.map.getCanvas().style.cursor = "";
+
+			hoveredParkingId.value = null;
+			removeHoverCircle();
+		});
+	});
+}
 
 onMounted(() => {
 	if (mapStore.map) {
@@ -369,6 +322,9 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+	// 清理懸停圓圈
+	removeHoverCircle();
+	
 	// 清理圖層
 	clearFilter();
 
@@ -385,81 +341,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="parkingmapchart">
-    <div class="parkingmapchart-info">
-      <div class="parkingmapchart-controls">
-        <button
-          :disabled="!circleCenter"
-          class="parkingmapchart-clear-btn"
-          @click="clearFilter"
-        >
-          清除篩選
-        </button>
-      </div>
-
-      <div
-        v-if="circleCenter"
-        class="parkingmapchart-stats"
-      >
-        <h6>篩選範圍：半徑 {{ Math.round(circleRadius) }} 公尺</h6>
-        <h6>找到 {{ filteredParking.length }} 個停車場</h6>
-      </div>
-
-      <div class="parkingmapchart-legend">
-        <div class="parkingmapchart-legend-item">
-          <div
-            class="legend-color"
-            style="background-color: #f44336"
-          />
-          <span>小型停車場 (≤100車位)</span>
-        </div>
-        <div class="parkingmapchart-legend-item">
-          <div
-            class="legend-color"
-            style="background-color: #ff9800"
-          />
-          <span>中型停車場 (101-500車位)</span>
-        </div>
-        <div class="parkingmapchart-legend-item">
-          <div
-            class="legend-color"
-            style="background-color: #4caf50"
-          />
-          <span>大型停車場 (>500車位)</span>
-        </div>
-        <div class="parkingmapchart-legend-item">
-          <div
-            class="legend-color"
-            style="background-color: #2196f3"
-          />
-          <span>身障友善</span>
-        </div>
-        <div class="parkingmapchart-legend-item">
-          <div
-            class="legend-color"
-            style="background-color: #9c27b0"
-          />
-          <span>孕婦友善</span>
-        </div>
-      </div>
-    </div>
-
-    <div
-      ref="mapContainer"
-      class="parkingmapchart-instruction"
-      :class="{ dragging: isDragging }"
-      @mousedown="handleMouseDown"
-    >
-      <p v-if="!circleCenter">
-        <span class="material-icons">touch_app</span>
-        點擊並拖拉來選擇篩選範圍
-      </p>
-      <p v-else-if="isDragging">
-        <span class="material-icons">radio_button_unchecked</span>
-        拖拉來調整篩選半徑
-      </p>
-    </div>
-  </div>
+  <div class="parkingmapchart" />
 </template>
 
 <style scoped lang="scss">

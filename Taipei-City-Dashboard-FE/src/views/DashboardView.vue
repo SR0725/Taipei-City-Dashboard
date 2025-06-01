@@ -14,7 +14,6 @@ import router from "../router";
 import { useContentStore } from "../store/contentStore";
 import { useDialogStore } from "../store/dialogStore";
 import { useAuthStore } from "../store/authStore";
-import { watch } from "vue";
 
 import MoreInfo from "../components/dialogs/MoreInfo.vue";
 import ReportIssue from "../components/dialogs/ReportIssue.vue";
@@ -23,9 +22,6 @@ const contentStore = useContentStore();
 const dialogStore = useDialogStore();
 const authStore = useAuthStore();
 
-watch(contentStore.currentDashboard, (newVal) => {
-	console.log(newVal);
-});
 
 function handleOpenSettings() {
 	contentStore.editDashboard = JSON.parse(

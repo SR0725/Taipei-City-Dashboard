@@ -17,20 +17,63 @@ import { CityManager } from "../dashboardComponent/utilities/cityManager";
 // 停車場組件測試資料
 export const parkingComponentTestData = {
 	id: 999,
-	index: "taipei_parking_interactive",
-	name: "臺北停車場互動地圖",
-	source: "臺北市停車管理工程處",
+	index: "bussiness_district",
+	categories: [
+		"北投區",
+		"士林區",
+		"內湖區",
+		"南港區",
+		"松山區",
+		"信義區",
+		"中山區",
+		"大同區",
+		"中正區",
+		"萬華區",
+		"大安區",
+		"文山區",
+		"新莊區",
+		"淡水區",
+		"汐止區",
+		"板橋區",
+		"三重區",
+		"樹林區",
+		"土城區",
+		"蘆洲區",
+		"中和區",
+		"永和區",
+		"新店區",
+		"鶯歌區",
+		"三峽區",
+		"瑞芳區",
+		"五股區",
+		"泰山區",
+		"林口區",
+		"深坑區",
+		"石碇區",
+		"坪林區",
+		"三芝區",
+		"石門區",
+		"八里區",
+		"平溪區",
+		"雙溪區",
+		"貢寮區",
+		"金山區",
+		"萬里區",
+		"烏來區",
+	],
+	name: "台北商圈數量",
+	source: "臺北市商業處",
 	chart_config: {
-		color: ["#2196F3", "#4CAF50", "#FF9800", "#F44336", "#9C27B0"],
-		types: ["ParkingMapChart"],
+		index: "bussiness_district",
+		types: ["DistrictChart", "ColumnChart", "ParkingMapChart"],
+		color: ["#FFCA9C"],
 		unit: "個",
-		categories: [],
 	},
-	query_type: "geojson",
+	query_type: "three_d",
 	map_config: [
 		{
-			index: "taipei_parking",
-			title: "臺北停車場",
+			index: "bussiness_district",
+			title: "台北商圈",
 			type: "circle",
 			source: "geojson",
 			city: "taipei",
@@ -65,20 +108,17 @@ export const parkingComponentTestData = {
 				"circle-stroke-color": "#ffffff",
 			},
 			property: [
-				{ key: "name", name: "停車場名稱" },
-				{ key: "area", name: "行政區" },
-				{ key: "address", name: "地址" },
-				{ key: "totalcar", name: "小型車格數" },
-				{ key: "totalmotor", name: "機車格數" },
-				{ key: "payex", name: "收費方式" },
-				{ key: "tel", name: "聯絡電話" },
+				{ key: "行政區", name: "行政區" },
+				{ key: "地址", name: "地址" },
+				{ key: "面積", name: "面積" },
+				{ key: "radius", name: "半徑" },
 			],
 		},
 	],
 	map_filter: null,
 	history_config: null,
 	time_from: "static",
-	time_to: "now",
+	time_to: null,
 	update_freq: null,
 	update_freq_unit: null,
 	short_desc: "以互動式圓圈篩選方式顯示臺北市各停車場位置、容量及特殊服務",
@@ -89,8 +129,37 @@ export const parkingComponentTestData = {
 	links: ["https://data.taipei/"],
 	tags: ["停車場", "交通", "地圖", "互動"],
 	contributors: ["doit"],
-	city: "taipei",
-	chart_data: null, // 會在實際使用時從 geojson 載入
+	city: "metrotaipei",
+	data: [
+		{
+			name: "15_64歲人口數",
+			icon: "",
+			data: [
+				2274, 662, 138, 118, 1038, 209, 1400, 2420, 123, 33, 40, 34,
+				609, 1687, 38, 1226, 518, 20, 1102, 1259, 3055, 1362, 1117, 909,
+				1059, 621, 731, 62, 1176, 735, 116, 1471, 246, 1382, 553, 951,
+				1137, 446, 2167, 1403, 61,
+			],
+		},
+		{
+			name: "0_14歲人口數",
+			icon: "",
+			data: [
+				12, 292, 333, 120, 176, 322, 183, 5, 236, 168, 245, 190, 549,
+				444, 188, 7, 24, 232, 211, 35, 193, 77, 165, 3, 100, 186, 13,
+				86, 12, 83, 159, 3, 314, 3, 222, 214, 116, 3, 109, 1, 16,
+			],
+		},
+		{
+			name: "65歲以上人口數",
+			icon: "",
+			data: [
+				430, 580, 369, 96, 106, 270, 219, 669, 53, 139, 412, 828, 22,
+				39, 289, 229, 32, 303, 10, 286, 15, 8, 141, 512, 437, 37, 347,
+				104, 387, 574, 15, 64, 423, 18, 523, 417, 19, 233, 536, 35, 190,
+			],
+		},
+	],
 };
 
 export const useContentStore = defineStore("content", {
@@ -351,25 +420,14 @@ export const useContentStore = defineStore("content", {
 					const component = this.cityDashboard.components[index];
 					try {
 						// 檢查是否為停車場組件，如果是則載入本地 GeoJSON 資料
-						if (component.index === "taipei_parking_interactive") {
-							// 載入本地 GeoJSON 資料
-							const response = await fetch(
-								"/mapData/taipei_parking.geojson"
-							);
-							const geojsonData = await response.json();
-							// 將 GeoJSON 轉換為組件所需的格式
+						if (component.index === "bussiness_district") {
 							this.cityDashboard.components[index].chart_data =
-								geojsonData.features || [];
+								parkingComponentTestData.data;
 
-							// 設定 categories 如果需要
-							if (
-								this.cityDashboard.components[index]
-									.chart_config
-							) {
-								this.cityDashboard.components[
-									index
-								].chart_config.categories = [];
-							}
+							this.cityDashboard.components[
+								index
+							].chart_config.categories =
+								parkingComponentTestData.categories;
 						} else {
 							// 4-2. Get chart data from API for other components
 							const response = await http.get(
@@ -473,7 +531,6 @@ export const useContentStore = defineStore("content", {
 		async filterCurrentDashboardContent() {
 			const { components } = this.cityDashboard;
 
-			console.log(components);
 			if (components && components.length > 0) {
 				const currentCityData = components.filter(
 					(item) => item.city === this.currentDashboard.city
